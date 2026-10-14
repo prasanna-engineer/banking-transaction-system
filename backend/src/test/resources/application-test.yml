@@ -1,0 +1,7 @@
+# Active when a test has @ActiveProfiles("test"). Overrides only what differs from application.yml.
+spring:
+  datasource:
+    url: ${TEST_DATASOURCE_URL:jdbc:mariadb://localhost:3306/banking_mgmt_test_db}
+  flyway:
+    # Schema only, no demo data: each test creates exactly the rows it needs.
+    locations: classpath:db/migration
