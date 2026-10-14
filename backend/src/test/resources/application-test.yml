@@ -5,3 +5,8 @@ spring:
   flyway:
     # Schema only, no demo data: each test creates exactly the rows it needs.
     locations: classpath:db/migration
+
+app:
+  jwt:
+    # Test-only key, committed on purpose. It signs tokens that exist only inside test runs.
+    secret: test-only-signing-key-not-a-real-secret-0123456789

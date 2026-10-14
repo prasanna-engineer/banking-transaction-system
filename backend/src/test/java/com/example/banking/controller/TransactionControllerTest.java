@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.HttpHeaders;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,7 +23,7 @@ import com.example.banking.entity.BankAccount;
 import com.example.banking.entity.BankTransaction;
 import com.example.banking.entity.User;
 import com.example.banking.enums.Role;
-import com.example.banking.security.DemoUserHeader;
+import com.example.banking.security.JwtTokenService;
 import com.example.banking.support.TestFixtures;
 
 import jakarta.persistence.EntityManager;
@@ -38,6 +39,9 @@ class TransactionControllerTest {
 
 	@Autowired
 	private EntityManager entityManager;
+
+	@Autowired
+	private JwtTokenService tokenService;
 
 	private User asha;
 
@@ -80,7 +84,7 @@ class TransactionControllerTest {
 
 	@Test
 	void customerSeesOnlyTransactionsTouchingTheirAccounts() throws Exception {
-		mockMvc.perform(get("/api/v1/transactions").header(DemoUserHeader.NAME, asha.getId()))
+		mockMvc.perform(get("/api/v1/transactions").header(HttpHeaders.AUTHORIZATION, bearer(asha)))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.totalElements").value(3))
 			.andExpect(jsonPath("$.content[*].reference", containsInAnyOrder(ashaDeposit.getReference(),
@@ -89,19 +93,19 @@ class TransactionControllerTest {
 
 	@Test
 	void adminSeesAllTransactions() throws Exception {
-		mockMvc.perform(get("/api/v1/transactions").header(DemoUserHeader.NAME, admin.getId()))
+		mockMvc.perform(get("/api/v1/transactions").header(HttpHeaders.AUTHORIZATION, bearer(admin)))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.totalElements").value(5));
 	}
 
 	@Test
 	void filtersByTypeAndAccount() throws Exception {
-		mockMvc.perform(get("/api/v1/transactions").param("type", "TRANSFER").header(DemoUserHeader.NAME, asha.getId()))
+		mockMvc.perform(get("/api/v1/transactions").param("type", "TRANSFER").header(HttpHeaders.AUTHORIZATION, bearer(asha)))
 			.andExpect(jsonPath("$.totalElements").value(2));
 
 		mockMvc
 			.perform(get("/api/v1/transactions").param("accountId", ashaCurrent.getId().toString())
-				.header(DemoUserHeader.NAME, asha.getId()))
+				.header(HttpHeaders.AUTHORIZATION, bearer(asha)))
 			.andExpect(jsonPath("$.totalElements").value(1))
 			.andExpect(jsonPath("$.content[0].reference").value(ashaToSelf.getReference()));
 	}
@@ -110,7 +114,7 @@ class TransactionControllerTest {
 	void filteringByAnotherCustomersAccountIsNotFound() throws Exception {
 		mockMvc
 			.perform(get("/api/v1/transactions").param("accountId", raviSavings.getId().toString())
-				.header(DemoUserHeader.NAME, asha.getId()))
+				.header(HttpHeaders.AUTHORIZATION, bearer(asha)))
 			.andExpect(status().isNotFound())
 			.andExpect(jsonPath("$.code").value("ACCOUNT_NOT_FOUND"));
 	}
@@ -119,7 +123,7 @@ class TransactionControllerTest {
 	void paginatesWithStableNewestFirstOrderAndMetadata() throws Exception {
 		mockMvc
 			.perform(get("/api/v1/transactions").param("size", "2").param("page", "0")
-				.header(DemoUserHeader.NAME, asha.getId()))
+				.header(HttpHeaders.AUTHORIZATION, bearer(asha)))
 			.andExpect(jsonPath("$.content", hasSize(2)))
 			.andExpect(jsonPath("$.content[0].reference").value(ashaToSelf.getReference()))
 			.andExpect(jsonPath("$.content[1].reference").value(ashaToRavi.getReference()))
@@ -132,7 +136,7 @@ class TransactionControllerTest {
 
 		mockMvc
 			.perform(get("/api/v1/transactions").param("size", "2").param("page", "1")
-				.header(DemoUserHeader.NAME, asha.getId()))
+				.header(HttpHeaders.AUTHORIZATION, bearer(asha)))
 			.andExpect(jsonPath("$.content", hasSize(1)))
 			.andExpect(jsonPath("$.content[0].reference").value(ashaDeposit.getReference()))
 			.andExpect(jsonPath("$.last").value(true));
@@ -140,7 +144,7 @@ class TransactionControllerTest {
 
 	@Test
 	void pageSizeIsCappedSoHistoryCanNeverBeDumpedInOneRequest() throws Exception {
-		mockMvc.perform(get("/api/v1/transactions").param("size", "100000").header(DemoUserHeader.NAME, asha.getId()))
+		mockMvc.perform(get("/api/v1/transactions").param("size", "100000").header(HttpHeaders.AUTHORIZATION, bearer(asha)))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.size").value(100));
 	}
@@ -152,11 +156,11 @@ class TransactionControllerTest {
 
 		mockMvc
 			.perform(get("/api/v1/transactions").param("from", today).param("to", today)
-				.header(DemoUserHeader.NAME, asha.getId()))
+				.header(HttpHeaders.AUTHORIZATION, bearer(asha)))
 			.andExpect(jsonPath("$.totalElements").value(3));
 
 		mockMvc
-			.perform(get("/api/v1/transactions").param("to", yesterday).header(DemoUserHeader.NAME, asha.getId()))
+			.perform(get("/api/v1/transactions").param("to", yesterday).header(HttpHeaders.AUTHORIZATION, bearer(asha)))
 			.andExpect(jsonPath("$.totalElements").value(0));
 	}
 
@@ -164,22 +168,22 @@ class TransactionControllerTest {
 	void rejectsInvalidQueryParameters() throws Exception {
 		mockMvc
 			.perform(get("/api/v1/transactions").param("from", "2026-10-14").param("to", "2026-10-01")
-				.header(DemoUserHeader.NAME, asha.getId()))
+				.header(HttpHeaders.AUTHORIZATION, bearer(asha)))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.code").value("INVALID_DATE_RANGE"));
 
-		mockMvc.perform(get("/api/v1/transactions").param("sort", "passwordHash").header(DemoUserHeader.NAME, asha.getId()))
+		mockMvc.perform(get("/api/v1/transactions").param("sort", "passwordHash").header(HttpHeaders.AUTHORIZATION, bearer(asha)))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.code").value("INVALID_SORT"));
 
-		mockMvc.perform(get("/api/v1/transactions").param("type", "SHOPPING").header(DemoUserHeader.NAME, asha.getId()))
+		mockMvc.perform(get("/api/v1/transactions").param("type", "SHOPPING").header(HttpHeaders.AUTHORIZATION, bearer(asha)))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.code").value("INVALID_PARAMETER"));
 	}
 
 	@Test
 	void transactionDetailMasksAccountNumbersAndSendsAmountAsString() throws Exception {
-		mockMvc.perform(get("/api/v1/transactions/{id}", ashaToRavi.getId()).header(DemoUserHeader.NAME, asha.getId()))
+		mockMvc.perform(get("/api/v1/transactions/{id}", ashaToRavi.getId()).header(HttpHeaders.AUTHORIZATION, bearer(asha)))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.type").value("TRANSFER"))
 			.andExpect(jsonPath("$.status").value("COMPLETED"))
@@ -191,10 +195,13 @@ class TransactionControllerTest {
 	@Test
 	void unrelatedTransactionIsNotFound() throws Exception {
 		mockMvc
-			.perform(get("/api/v1/transactions/{id}", raviOnlyDeposit.getId()).header(DemoUserHeader.NAME,
-					asha.getId()))
+			.perform(get("/api/v1/transactions/{id}", raviOnlyDeposit.getId()).header(HttpHeaders.AUTHORIZATION, bearer(asha)))
 			.andExpect(status().isNotFound())
 			.andExpect(jsonPath("$.code").value("TRANSACTION_NOT_FOUND"));
+	}
+
+	private String bearer(User user) {
+		return "Bearer " + tokenService.createAccessToken(user.getId(), user.getRole()).value();
 	}
 
 }

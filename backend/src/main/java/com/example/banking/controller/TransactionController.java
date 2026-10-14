@@ -5,7 +5,6 @@ import java.time.LocalDate;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -15,7 +14,7 @@ import com.example.banking.dto.transaction.TransactionFilter;
 import com.example.banking.dto.transaction.TransactionResponse;
 import com.example.banking.enums.TransactionStatus;
 import com.example.banking.enums.TransactionType;
-import com.example.banking.security.DemoUserHeader;
+import com.example.banking.security.CurrentUserId;
 import com.example.banking.service.TransactionService;
 
 @RestController
@@ -30,7 +29,7 @@ public class TransactionController {
 
 	// GET /api/v1/transactions?accountId=1&from=2026-10-01&to=2026-10-14&type=TRANSFER&page=0&size=20&sort=createdAt,desc
 	@GetMapping
-	public PageResponse<TransactionResponse> search(@RequestHeader(DemoUserHeader.NAME) Long currentUserId,
+	public PageResponse<TransactionResponse> search(@CurrentUserId Long currentUserId,
 			@RequestParam(required = false) Long accountId,
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
 			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
@@ -44,7 +43,7 @@ public class TransactionController {
 	}
 
 	@GetMapping("/{id}")
-	public TransactionResponse get(@RequestHeader(DemoUserHeader.NAME) Long currentUserId, @PathVariable Long id) {
+	public TransactionResponse get(@CurrentUserId Long currentUserId, @PathVariable Long id) {
 		return transactionService.getTransaction(currentUserId, id);
 	}
 
