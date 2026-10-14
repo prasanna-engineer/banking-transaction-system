@@ -1,0 +1,25 @@
+# --- Secrets: never commit real credentials ---
+.env
+.env.*
+!.env.example
+*.local
+application-local.yml
+application-local.properties
+
+# --- Build output ---
+target/
+build/
+dist/
+node_modules/
+
+# --- Logs ---
+logs/
+*.log
+
+# --- Editors / OS ---
+.idea/
+*.iml
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
