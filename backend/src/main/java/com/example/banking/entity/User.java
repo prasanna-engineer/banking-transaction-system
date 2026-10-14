@@ -64,6 +64,14 @@ public class User {
 		return email.trim().toLowerCase(Locale.ROOT);
 	}
 
+	public boolean isAdmin() {
+		return role == Role.ADMIN;
+	}
+
+	public boolean isActive() {
+		return status == UserStatus.ACTIVE;
+	}
+
 	@PrePersist
 	void onCreate() {
 		createdAt = Instant.now();

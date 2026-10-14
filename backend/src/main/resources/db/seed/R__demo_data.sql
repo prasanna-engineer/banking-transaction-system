@@ -19,3 +19,20 @@ FROM (
     UNION ALL SELECT 'ravi@example.com', '100000000003', 'SAVINGS', 8000.00
 ) a
 JOIN users u ON u.email = a.email;
+
+-- History that explains the balances above:
+--   100000000001: 52000.00 deposit - 2000.00 transfer out = 50000.00
+--   100000000002: 12500.50 deposit                         = 12500.50
+--   100000000003:  6000.00 deposit + 2000.00 transfer in  =  8000.00
+INSERT IGNORE INTO transactions (reference, type, status, source_account_id, destination_account_id, amount, currency, description, created_by, created_at)
+SELECT t.reference, t.type, 'COMPLETED', src.id, dst.id, t.amount, 'INR', t.description, u.id, @now - INTERVAL t.days_ago DAY
+FROM (
+    SELECT 'TRX-DEMO-0001' AS reference, 'DEPOSIT' AS type, NULL AS source_number, '100000000001' AS destination_number,
+           52000.00 AS amount, 'Opening deposit' AS description, 'admin@example.com' AS created_by_email, 30 AS days_ago
+    UNION ALL SELECT 'TRX-DEMO-0002', 'DEPOSIT', NULL, '100000000002', 12500.50, 'Opening deposit', 'admin@example.com', 30
+    UNION ALL SELECT 'TRX-DEMO-0003', 'DEPOSIT', NULL, '100000000003', 6000.00, 'Opening deposit', 'admin@example.com', 30
+    UNION ALL SELECT 'TRX-DEMO-0004', 'TRANSFER', '100000000001', '100000000003', 2000.00, 'Rent share', 'asha@example.com', 5
+) t
+JOIN users u ON u.email = t.created_by_email
+LEFT JOIN bank_accounts src ON src.account_number = t.source_number
+JOIN bank_accounts dst ON dst.account_number = t.destination_number;
