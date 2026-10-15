@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { listAccounts } from '../../api/accounts'
+import { listPayees } from '../../api/payees'
 import { createTransfer, newIdempotencyKey } from '../../api/transfers'
 import { useApi } from '../../api/useApi'
 import { useLive } from '../notifications/LiveContext'
@@ -18,6 +19,7 @@ const EMPTY_FORM = {
   destinationType: 'own',
   destinationAccountId: '',
   destinationAccountNumber: '',
+  destinationPayeeId: '',
   amount: '',
   description: '',
 }
@@ -28,9 +30,15 @@ const EMPTY_FORM = {
  */
 export default function TransferPage() {
   const { moneyVersion } = useLive()
+  const payees = useApi((signal) => listPayees(signal), [])
+  // "Pay" on the Payees page links here as /transfer?payee=ID, so that payee starts selected.
+  const [searchParams] = useSearchParams()
+  const initialPayee = searchParams.get('payee')
   const accounts = useApi((signal) => listAccounts(signal), [moneyVersion])
   const [step, setStep] = useState('form')
-  const [form, setForm] = useState(EMPTY_FORM)
+  const [form, setForm] = useState(() =>
+    initialPayee ? { ...EMPTY_FORM, destinationType: 'payee', destinationPayeeId: initialPayee } : EMPTY_FORM,
+  )
   const [fieldErrors, setFieldErrors] = useState({})
   const [submitError, setSubmitError] = useState(null)
   const [submitting, setSubmitting] = useState(false)
@@ -53,6 +61,8 @@ export default function TransferPage() {
   const byId = new Map(accounts.data.map((a) => [String(a.id), a]))
   const source = byId.get(form.sourceAccountId)
   const ownDestination = byId.get(form.destinationAccountId)
+  const savedPayees = payees.data ?? []
+  const payee = savedPayees.find((p) => String(p.id) === form.destinationPayeeId)
 
   function update(field) {
     return (event) => setForm((previous) => ({ ...previous, [field]: event.target.value }))
@@ -65,6 +75,8 @@ export default function TransferPage() {
       if (!ownDestination) errors.destinationAccountId = 'Choose the account to send to.'
       else if (form.destinationAccountId === form.sourceAccountId)
         errors.destinationAccountId = 'Choose a different account from the source.'
+    } else if (form.destinationType === 'payee') {
+      if (!payee) errors.destinationPayeeId = 'Choose a saved payee.'
     } else if (!ACCOUNT_NUMBER_PATTERN.test(form.destinationAccountNumber.trim())) {
       errors.destinationAccountNumber = 'Enter the 6–20 digit account number.'
     } else if (form.destinationAccountNumber.trim() === source?.accountNumber) {
@@ -97,7 +109,7 @@ export default function TransferPage() {
         description: form.description.trim() || undefined,
         ...(form.destinationType === 'own'
           ? { destinationAccountId: Number(form.destinationAccountId) }
-          : { destinationAccountNumber: form.destinationAccountNumber.trim() }),
+          : { destinationAccountNumber: form.destinationType === 'payee' ? payee.accountNumber : form.destinationAccountNumber.trim() }),
       }
       setResult(await createTransfer(body, idempotencyKey))
       setStep('done')
@@ -118,7 +130,9 @@ export default function TransferPage() {
   const destinationLabel =
     form.destinationType === 'own'
       ? ownDestination && `${titleCase(ownDestination.accountType)} ${maskAccountNumber(ownDestination.accountNumber)}`
-      : `Account ${maskAccountNumber(form.destinationAccountNumber.trim())}`
+      : form.destinationType === 'payee'
+        ? payee && `${payee.nickname} (${payee.maskedAccountNumber})`
+        : `Account ${maskAccountNumber(form.destinationAccountNumber.trim())}`
 
   return (
     <>
@@ -164,6 +178,16 @@ export default function TransferPage() {
               <input
                 type="radio"
                 name="destinationType"
+                value="payee"
+                checked={form.destinationType === 'payee'}
+                onChange={update('destinationType')}
+              />
+              A saved payee
+            </label>
+            <label className="radio">
+              <input
+                type="radio"
+                name="destinationType"
                 value="other"
                 checked={form.destinationType === 'other'}
                 onChange={update('destinationType')}
@@ -188,6 +212,20 @@ export default function TransferPage() {
                     </option>
                   ))}
               </select>
+            </Field>
+          ) : form.destinationType === 'payee' ? (
+            <Field label="Payee" name="destinationPayeeId" error={fieldErrors.destinationPayeeId}>
+              <select id="destinationPayeeId" value={form.destinationPayeeId} onChange={update('destinationPayeeId')}>
+                <option value="">{savedPayees.length ? 'Select a payee…' : 'No saved payees yet'}</option>
+                {savedPayees.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.nickname} ({p.maskedAccountNumber})
+                  </option>
+                ))}
+              </select>
+              <p className="muted small field__hint">
+                <Link to="/payees">Manage payees</Link>
+              </p>
             </Field>
           ) : (
             <Field

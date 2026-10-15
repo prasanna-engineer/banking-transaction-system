@@ -61,6 +61,7 @@ public class SecurityConfig {
 				.requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
 				// Admins inspect activity; only customers move money (project guide, section 6).
 				.requestMatchers(HttpMethod.POST, "/api/v1/transfers").hasRole("CUSTOMER")
+				.requestMatchers("/api/v1/payees/**").hasRole("CUSTOMER")
 				.anyRequest().authenticated())
 			// Validates "Authorization: Bearer <jwt>" on every request using the JwtDecoder bean below.
 			.oauth2ResourceServer(oauth2 -> oauth2

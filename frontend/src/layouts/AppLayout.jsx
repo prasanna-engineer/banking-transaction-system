@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard' },
   { to: '/accounts', label: 'My accounts', roles: ['CUSTOMER'] },
   { to: '/transfer', label: 'Transfer', roles: ['CUSTOMER'] },
+  { to: '/payees', label: 'Payees', roles: ['CUSTOMER'] },
   { to: '/transactions', label: 'Transactions' },
   { to: '/admin/users', label: 'Users', roles: ['ADMIN'] },
   { to: '/admin/audit-logs', label: 'Audit log', roles: ['ADMIN'] },

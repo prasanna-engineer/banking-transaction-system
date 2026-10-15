@@ -6,6 +6,7 @@ import AdminUsersPage from './features/admin/AdminUsersPage'
 import LoginPage from './features/auth/LoginPage'
 import RegisterPage from './features/auth/RegisterPage'
 import DashboardPage from './features/dashboard/DashboardPage'
+import PayeesPage from './features/payees/PayeesPage'
 import HistoryPage from './features/transactions/HistoryPage'
 import TransferPage from './features/transactions/TransferPage'
 import AppLayout from './layouts/AppLayout'
@@ -35,6 +36,7 @@ export default function App() {
 
           <Route element={<RoleRoute role="CUSTOMER" />}>
             <Route path="transfer" element={<TransferPage />} />
+            <Route path="payees" element={<PayeesPage />} />
           </Route>
 
           <Route path="admin" element={<RoleRoute role="ADMIN" />}>

@@ -3,11 +3,13 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { listAccounts } from '../../api/accounts'
 import { ApiError } from '../../api/client'
+import { listPayees } from '../../api/payees'
 import { createTransfer } from '../../api/transfers'
 import TransferPage from './TransferPage'
 
 // Replace the real HTTP calls with fakes so the page can be tested without a backend.
 vi.mock('../../api/accounts', () => ({ listAccounts: vi.fn() }))
+vi.mock('../../api/payees', () => ({ listPayees: vi.fn(() => Promise.resolve([])) }))
 vi.mock('../../api/transfers', () => ({
   createTransfer: vi.fn(),
   newIdempotencyKey: vi.fn(() => `key-${Math.random()}`),
@@ -65,6 +67,25 @@ describe('TransferPage', () => {
     expect(await screen.findByText('TRX-20261015-ABCDEFGHJK')).toBeInTheDocument()
     const [body] = createTransfer.mock.calls[0]
     expect(body).toEqual({ sourceAccountId: 1, destinationAccountId: 2, amount: '25.50' })
+  })
+
+  it('pays a saved payee by account number', async () => {
+    listPayees.mockResolvedValue([
+      { id: 7, nickname: 'Ravi (rent)', accountNumber: '100000000003', maskedAccountNumber: '••••0003' },
+    ])
+    createTransfer.mockResolvedValue({ reference: 'TRX-P', status: 'COMPLETED', sourceAccountId: 1, amount: '10.00', currency: 'INR' })
+    renderPage()
+    await screen.findByLabelText('From')
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '1' } })
+    fireEvent.click(screen.getByLabelText('A saved payee'))
+    fireEvent.change(await screen.findByLabelText('Payee'), { target: { value: '7' } })
+    fireEvent.change(screen.getByLabelText('Amount (INR)'), { target: { value: '10' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Review transfer' }))
+
+    expect(screen.getByText('Ravi (rent) (••••0003)')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm transfer' }))
+    await screen.findByText('TRX-P')
+    expect(createTransfer.mock.calls[0][0]).toEqual({ sourceAccountId: 1, destinationAccountNumber: '100000000003', amount: '10' })
   })
 
   it('retries a failed confirm with the SAME idempotency key, so it can never be applied twice', async () => {
