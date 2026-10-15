@@ -11,6 +11,9 @@ import com.example.banking.dto.account.AccountResponse;
 import com.example.banking.security.CurrentUserId;
 import com.example.banking.service.AccountService;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
+
+@Tag(name = "Accounts", description = "Your accounts (admins can read any)")
 @RestController
 @RequestMapping("/api/v1/accounts")
 public class AccountController {

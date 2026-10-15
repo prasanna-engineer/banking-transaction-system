@@ -52,6 +52,9 @@ public class SecurityConfig {
 				.requestMatchers(HttpMethod.GET, "/api/v1/health").permitAll()
 				.requestMatchers(HttpMethod.POST, "/api/v1/auth/register", "/api/v1/auth/login").permitAll()
 				.requestMatchers("/error").permitAll()
+				// API documentation. The docs describe endpoints only; every endpoint still enforces its own rules.
+				// Turn off in a real deployment with API_DOCS_ENABLED=false.
+				.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
 				.requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
 				// Admins inspect activity; only customers move money (project guide, section 6).
 				.requestMatchers(HttpMethod.POST, "/api/v1/transfers").hasRole("CUSTOMER")

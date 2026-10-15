@@ -4,6 +4,9 @@ import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -88,6 +91,24 @@ public class GlobalExceptionHandler {
 			HttpServletRequest request) {
 		return build(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "UNSUPPORTED_MEDIA_TYPE",
 				"Content-Type must be application/json.", request);
+	}
+
+	// Two requests collided on the same row: a lock wait timed out, the database broke a deadlock, or
+	// an @Version check found stale data. Nothing was saved, and retrying is safe.
+	@ExceptionHandler({ PessimisticLockingFailureException.class, OptimisticLockingFailureException.class })
+	public ResponseEntity<ErrorResponse> handleLockConflict(Exception ex, HttpServletRequest request) {
+		log.warn("Concurrent update conflict on {} {}: {}", request.getMethod(), request.getRequestURI(),
+				ex.getClass().getSimpleName());
+		return build(HttpStatus.CONFLICT, "CONCURRENT_UPDATE",
+				"The record was changed by another request at the same time. Please try again.", request);
+	}
+
+	// A database constraint (unique, foreign key, CHECK) rejected the change. The SQL detail stays in the log.
+	@ExceptionHandler(DataIntegrityViolationException.class)
+	public ResponseEntity<ErrorResponse> handleDataIntegrity(DataIntegrityViolationException ex,
+			HttpServletRequest request) {
+		log.warn("Data integrity violation on {} {}", request.getMethod(), request.getRequestURI(), ex);
+		return build(HttpStatus.CONFLICT, "DATA_CONFLICT", "The request conflicts with existing data.", request);
 	}
 
 	// Safety net: log the full details on the server, but tell the client nothing internal.

@@ -13,8 +13,13 @@ import com.example.banking.dto.auth.RegisterRequest;
 import com.example.banking.dto.user.UserResponse;
 import com.example.banking.service.AuthService;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
+
 import jakarta.validation.Valid;
 
+@Tag(name = "Authentication", description = "Register and log in to get a JWT")
+@SecurityRequirements // public: no token needed
 @RestController
 @RequestMapping("/api/v1/auth")
 public class AuthController {

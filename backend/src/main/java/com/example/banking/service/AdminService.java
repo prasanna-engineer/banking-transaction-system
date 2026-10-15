@@ -3,6 +3,8 @@ package com.example.banking.service;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
@@ -21,6 +23,8 @@ import com.example.banking.repository.UserRepository;
 
 @Service
 public class AdminService {
+
+	private static final Logger log = LoggerFactory.getLogger(AdminService.class);
 
 	private final UserRepository userRepository;
 
@@ -65,6 +69,7 @@ public class AdminService {
 			metadata.put("from", previous.name());
 			metadata.put("to", newStatus.name());
 			auditService.record(admin, "USER_STATUS_CHANGED", "USER", target.getId(), metadata);
+			log.info("Admin {} changed user {} status {} -> {}", admin.getId(), target.getId(), previous, newStatus);
 		}
 		return UserResponse.from(target);
 	}

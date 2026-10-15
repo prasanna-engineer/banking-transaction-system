@@ -8,6 +8,9 @@ import com.example.banking.dto.user.UserResponse;
 import com.example.banking.security.CurrentUserId;
 import com.example.banking.service.CurrentUserService;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
+
+@Tag(name = "Users", description = "The logged-in user's profile")
 @RestController
 @RequestMapping("/api/v1/users")
 public class UserController {

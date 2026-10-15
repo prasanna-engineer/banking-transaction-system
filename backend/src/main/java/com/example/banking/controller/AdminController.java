@@ -15,9 +15,12 @@ import com.example.banking.dto.user.UserResponse;
 import com.example.banking.security.CurrentUserId;
 import com.example.banking.service.AdminService;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 import jakarta.validation.Valid;
 
 /** Everything under /api/v1/admin requires ROLE_ADMIN (see SecurityConfig). */
+@Tag(name = "Admin", description = "User management and audit log (admins only)")
 @RestController
 @RequestMapping("/api/v1/admin")
 public class AdminController {

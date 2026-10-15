@@ -17,6 +17,9 @@ import com.example.banking.enums.TransactionType;
 import com.example.banking.security.CurrentUserId;
 import com.example.banking.service.TransactionService;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
+
+@Tag(name = "Transactions", description = "Paginated, filterable transaction history")
 @RestController
 @RequestMapping("/api/v1/transactions")
 public class TransactionController {
