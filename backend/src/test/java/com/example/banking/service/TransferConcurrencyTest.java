@@ -124,9 +124,56 @@ class TransferConcurrencyTest {
 		assertThat(transactionCount(source)).isZero();
 	}
 
+	@Test
+	void simultaneousRetriesWithTheSameIdempotencyKeyMoveMoneyOnce() throws Exception {
+		User owner = newUser();
+		BankAccount source = newAccount(owner, "100.00");
+		BankAccount destination = newAccount(owner, "0.00");
+		TransferRequest request = new TransferRequest(source.getId(), destination.getId(), new BigDecimal("30.00"),
+				"double click");
+
+		// 10 copies of the same request with the same key, all at the same instant (e.g. an impatient retry loop).
+		List<Outcome> outcomes = runConcurrently(10,
+				i -> () -> transferService.transfer(owner.getId(), request, "same-key-" + owner.getId()));
+
+		assertThat(outcomes).allMatch(outcome -> outcome.succeeded());
+		List<String> references = outcomes.stream()
+			.map(outcome -> ((TransferService.TransferResult) outcome.value()).response().reference())
+			.distinct()
+			.toList();
+		assertThat(references).as("every caller gets the one original transfer").hasSize(1);
+		assertThat(outcomes.stream().filter(o -> !((TransferService.TransferResult) o.value()).replayed()).count())
+			.as("exactly one request did the work; the rest were replays")
+			.isEqualTo(1);
+		assertThat(balanceOf(source)).isEqualByComparingTo("70.00");
+		assertThat(balanceOf(destination)).isEqualByComparingTo("30.00");
+		assertThat(transactionCount(source)).isEqualTo(1);
+	}
+
+	@Test
+	void aFailedAttemptDoesNotUseUpItsIdempotencyKey() {
+		User owner = newUser();
+		BankAccount source = newAccount(owner, "10.00");
+		BankAccount destination = newAccount(owner, "0.00");
+		TransferRequest tooMuch = new TransferRequest(source.getId(), destination.getId(), new BigDecimal("50.00"),
+				null);
+
+		// The key is stored in the same database transaction as the transfer, so a rejected transfer leaves no
+		// trace: retrying gives the real answer again, not a stuck "key already used".
+		for (int attempt = 0; attempt < 2; attempt++) {
+			assertThatThrownBy(() -> transferService.transfer(owner.getId(), tooMuch, "failing-key-" + owner.getId()))
+				.isInstanceOfSatisfying(ApiException.class,
+						ex -> assertThat(ex.getCode()).isEqualTo("INSUFFICIENT_FUNDS"));
+		}
+		assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM idempotency_keys WHERE user_id = ?",
+				Integer.class, owner.getId()))
+			.isZero();
+	}
+
 	@AfterEach
 	void cleanUp() {
 		for (Long userId : createdUserIds) {
+			jdbcTemplate.update("DELETE FROM idempotency_keys WHERE user_id = ?", userId);
 			jdbcTemplate.update("DELETE FROM audit_logs WHERE actor_user_id = ?", userId);
 			jdbcTemplate.update("DELETE FROM transactions WHERE created_by = ?", userId);
 			jdbcTemplate.update("DELETE FROM bank_accounts WHERE user_id = ?", userId);
@@ -171,14 +218,13 @@ class TransferConcurrencyTest {
 				futures.add(pool.submit(() -> {
 					startGate.await();
 					try {
-						task.call();
-						return new Outcome(null);
+						return new Outcome(null, task.call());
 					}
 					catch (ApiException ex) {
-						return new Outcome(ex.getCode());
+						return new Outcome(ex.getCode(), null);
 					}
 					catch (Exception ex) {
-						return new Outcome("UNEXPECTED: " + ex);
+						return new Outcome("UNEXPECTED: " + ex, null);
 					}
 				}));
 			}
@@ -201,7 +247,8 @@ class TransferConcurrencyTest {
 
 	}
 
-	private record Outcome(String errorCode) {
+	/** errorCode is null on success; value is whatever the task returned. */
+	private record Outcome(String errorCode, Object value) {
 
 		boolean succeeded() {
 			return errorCode == null;

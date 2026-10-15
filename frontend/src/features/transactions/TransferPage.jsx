@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { listAccounts } from '../../api/accounts'
-import { createTransfer } from '../../api/transfers'
+import { createTransfer, newIdempotencyKey } from '../../api/transfers'
 import { useApi } from '../../api/useApi'
 import Alert from '../../components/Alert'
 import Spinner from '../../components/Spinner'
@@ -33,6 +33,9 @@ export default function TransferPage() {
   const [submitError, setSubmitError] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState(null)
+  // One key per reviewed transfer: pressing Confirm again after an error re-sends the same key,
+  // so the server can never process this transfer twice.
+  const [idempotencyKey, setIdempotencyKey] = useState(null)
 
   // Only block the page on the first load; a refresh after a transfer keeps showing the old data.
   if (!accounts.data && accounts.status === 'loading') return <Spinner label="Loading your accounts…" />
@@ -76,7 +79,10 @@ export default function TransferPage() {
   function handleReview(event) {
     event.preventDefault()
     setSubmitError(null)
-    if (validate()) setStep('review')
+    if (validate()) {
+      setIdempotencyKey(newIdempotencyKey())
+      setStep('review')
+    }
   }
 
   async function handleConfirm() {
@@ -91,7 +97,7 @@ export default function TransferPage() {
           ? { destinationAccountId: Number(form.destinationAccountId) }
           : { destinationAccountNumber: form.destinationAccountNumber.trim() }),
       }
-      setResult(await createTransfer(body))
+      setResult(await createTransfer(body, idempotencyKey))
       setStep('done')
       accounts.reload() // balances come from the server, never calculated here
     } catch (err) {

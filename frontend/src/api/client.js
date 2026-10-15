@@ -49,8 +49,8 @@ export class ApiError extends Error {
   }
 }
 
-export async function apiRequest(path, { method = 'GET', body, auth = true, signal } = {}) {
-  const headers = { Accept: 'application/json' }
+export async function apiRequest(path, { method = 'GET', body, auth = true, signal, headers: extraHeaders } = {}) {
+  const headers = { Accept: 'application/json', ...extraHeaders }
   if (body !== undefined) {
     headers['Content-Type'] = 'application/json'
   }

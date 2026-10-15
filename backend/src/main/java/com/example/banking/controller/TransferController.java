@@ -1,10 +1,11 @@
 package com.example.banking.controller;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.example.banking.dto.ErrorResponse;
@@ -14,6 +15,7 @@ import com.example.banking.security.CurrentUserId;
 import com.example.banking.service.TransferService;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -26,6 +28,8 @@ import jakarta.validation.Valid;
 @RequestMapping("/api/v1/transfers")
 public class TransferController {
 
+	static final String IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
+
 	private final TransferService transferService;
 
 	public TransferController(TransferService transferService) {
@@ -37,17 +41,26 @@ public class TransferController {
 			Give the destination as `destinationAccountId` (your own account) or `destinationAccountNumber`
 			(anyone's), not both. Send `amount` as a string with at most 2 decimals, e.g. `"250.75"`.
 			Debit, credit, transaction record and audit entry are committed together or not at all.
+
+			Send a unique `Idempotency-Key` (e.g. a UUID) to make retries safe: repeating the same request
+			with the same key returns the original result (header `Idempotent-Replayed: true`) instead of
+			moving money again.
 			""")
-	@ApiResponse(responseCode = "201", description = "Transfer completed")
+	@ApiResponse(responseCode = "201", description = "Transfer completed (or replayed for a repeated Idempotency-Key)")
 	@ApiResponse(responseCode = "400", description = "VALIDATION_FAILED, SAME_ACCOUNT, INSUFFICIENT_FUNDS, "
-			+ "CURRENCY_MISMATCH or AMOUNT_LIMIT_EXCEEDED", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+			+ "CURRENCY_MISMATCH, AMOUNT_LIMIT_EXCEEDED or INVALID_IDEMPOTENCY_KEY", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
 	@ApiResponse(responseCode = "403", description = "Only customers can transfer", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
 	@ApiResponse(responseCode = "404", description = "ACCOUNT_NOT_FOUND (also for accounts that are not yours)", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-	@ApiResponse(responseCode = "409", description = "ACCOUNT_NOT_ACTIVE or CONCURRENT_UPDATE", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+	@ApiResponse(responseCode = "409", description = "ACCOUNT_NOT_ACTIVE, CONCURRENT_UPDATE or IDEMPOTENCY_KEY_REUSED (same key, different data)", content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
 	@PostMapping
-	@ResponseStatus(HttpStatus.CREATED)
-	public TransferResponse transfer(@CurrentUserId Long currentUserId, @Valid @RequestBody TransferRequest request) {
-		return transferService.transfer(currentUserId, request);
+	public ResponseEntity<TransferResponse> transfer(@CurrentUserId Long currentUserId,
+			@Parameter(description = "Unique per transfer attempt; reuse it only when retrying the same request")
+			@RequestHeader(name = IDEMPOTENCY_KEY_HEADER, required = false) String idempotencyKey,
+			@Valid @RequestBody TransferRequest request) {
+		TransferService.TransferResult result = transferService.transfer(currentUserId, request, idempotencyKey);
+		return ResponseEntity.status(HttpStatus.CREATED)
+			.header("Idempotent-Replayed", String.valueOf(result.replayed()))
+			.body(result.response());
 	}
 
 }

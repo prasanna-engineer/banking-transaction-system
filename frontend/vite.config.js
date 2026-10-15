@@ -8,4 +8,10 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
   },
+  test: {
+    // A simulated browser (jsdom) so components can render in Node.
+    environment: 'jsdom',
+    setupFiles: './src/test/setup.js',
+    restoreMocks: true,
+  },
 })

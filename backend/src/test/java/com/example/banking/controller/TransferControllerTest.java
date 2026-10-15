@@ -3,6 +3,7 @@ package com.example.banking.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.matchesPattern;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -231,6 +232,66 @@ class TransferControllerTest {
 	}
 
 	@Test
+	void repeatingARequestWithTheSameIdempotencyKeyMovesMoneyOnlyOnce() throws Exception {
+		String body = """
+				{"sourceAccountId":%d,"destinationAccountId":%d,"amount":"75.00"}
+				""".formatted(ashaSavings.getId(), raviSavings.getId());
+
+		String first = withKey(asha, "retry-key-0001", body).andExpect(status().isCreated())
+			.andExpect(header().string("Idempotent-Replayed", "false"))
+			.andReturn()
+			.getResponse()
+			.getContentAsString();
+		// The client never saw the answer (e.g. network timeout) and sends exactly the same request again.
+		String second = withKey(asha, "retry-key-0001", body).andExpect(status().isCreated())
+			.andExpect(header().string("Idempotent-Replayed", "true"))
+			.andReturn()
+			.getResponse()
+			.getContentAsString();
+
+		assertThat((String) JsonPath.read(second, "$.reference")).isEqualTo(JsonPath.read(first, "$.reference"));
+		assertBalance(ashaSavings, "925.00");
+		assertBalance(raviSavings, "375.00");
+		assertThat(countTransactions()).isEqualTo(1);
+	}
+
+	@Test
+	void reusingAnIdempotencyKeyForDifferentDataIsAConflict() throws Exception {
+		withKey(asha, "reused-key-0001", """
+				{"sourceAccountId":%d,"destinationAccountId":%d,"amount":"10.00"}
+				""".formatted(ashaSavings.getId(), raviSavings.getId())).andExpect(status().isCreated());
+
+		withKey(asha, "reused-key-0001", """
+				{"sourceAccountId":%d,"destinationAccountId":%d,"amount":"99.00"}
+				""".formatted(ashaSavings.getId(), raviSavings.getId()))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_REUSED"));
+		assertBalance(ashaSavings, "990.00");
+	}
+
+	@Test
+	void theSameKeyFromDifferentUsersIsIndependent() throws Exception {
+		withKey(asha, "shared-key-0001", """
+				{"sourceAccountId":%d,"destinationAccountId":%d,"amount":"10.00"}
+				""".formatted(ashaSavings.getId(), raviSavings.getId())).andExpect(status().isCreated())
+			.andExpect(header().string("Idempotent-Replayed", "false"));
+		withKey(ravi, "shared-key-0001", """
+				{"sourceAccountId":%d,"destinationAccountId":%d,"amount":"10.00"}
+				""".formatted(raviSavings.getId(), ashaSavings.getId())).andExpect(status().isCreated())
+			.andExpect(header().string("Idempotent-Replayed", "false"));
+	}
+
+	@Test
+	void malformedIdempotencyKeyIsRejected() throws Exception {
+		withKey(asha, "bad key!", """
+				{"sourceAccountId":%d,"destinationAccountId":%d,"amount":"10.00"}
+				""".formatted(ashaSavings.getId(), raviSavings.getId()))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("INVALID_IDEMPOTENCY_KEY"));
+		assertUnchanged();
+	}
+
+	@Test
 	void missingFieldsAreValidationErrors() throws Exception {
 		mockMvc.perform(post("/api/v1/transfers").header(HttpHeaders.AUTHORIZATION, bearer(asha))
 			.contentType(MediaType.APPLICATION_JSON)
@@ -258,6 +319,13 @@ class TransferControllerTest {
 			.content("""
 					{"sourceAccountId":%d,"destinationAccountId":%d,"amount":%s,"description":"Test"}
 					""".formatted(source.getId(), destination.getId(), amountJson)));
+	}
+
+	private ResultActions withKey(User caller, String idempotencyKey, String json) throws Exception {
+		return mockMvc.perform(post("/api/v1/transfers").header(HttpHeaders.AUTHORIZATION, bearer(caller))
+			.header("Idempotency-Key", idempotencyKey)
+			.contentType(MediaType.APPLICATION_JSON)
+			.content(json));
 	}
 
 	private ResultActions transferJson(User caller, String json) throws Exception {
