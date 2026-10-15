@@ -1027,3 +1027,121 @@ fieldset.field legend {
     animation: none;
   }
 }
+
+/* ---- Chart (money in vs out) ----
+ * Series colours are validated categorical slots 1-2 (blue, orange): CVD and contrast checks pass
+ * in light and dark. Text never uses the series colour; colour sits only on marks and swatches. */
+:root {
+  --series-in: #2a78d6;
+  --series-out: #eb6834;
+  --chart-grid: #e7eaee;
+  --chart-baseline: #9aa4b1;
+}
+.chart {
+  margin: 0;
+}
+.chart__legend {
+  display: flex;
+  gap: 1.25rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+.chart__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.chart__swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+.chart__swatch.series-in {
+  background: var(--series-in);
+}
+.chart__swatch.series-out {
+  background: var(--series-out);
+}
+.chart__plot {
+  position: relative;
+}
+.chart__plot svg {
+  display: block;
+  max-width: 100%;
+}
+.chart path.series-in {
+  fill: var(--series-in);
+}
+.chart path.series-out {
+  fill: var(--series-out);
+}
+.chart__grid {
+  stroke: var(--chart-grid);
+  stroke-width: 1;
+}
+.chart__baseline {
+  stroke: var(--chart-baseline);
+  stroke-width: 1;
+}
+.chart__axis {
+  fill: var(--muted);
+  font-size: 12px;
+}
+.chart__hover-band {
+  fill: rgba(11, 58, 111, 0.06);
+}
+.chart__hit {
+  fill: transparent;
+  cursor: default;
+}
+.chart__hit:focus-visible {
+  outline: none;
+  stroke: var(--focus);
+  stroke-width: 2;
+}
+.chart__tooltip {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  display: grid;
+  gap: 0.2rem;
+  min-width: 170px;
+  padding: 0.55rem 0.75rem;
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 8px 24px rgba(16, 24, 40, 0.18);
+  font-size: 0.85rem;
+  pointer-events: none;
+}
+.chart__tooltip-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.4rem;
+}
+.chart__tooltip-row b {
+  font-variant-numeric: tabular-nums;
+}
+.chart__empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  color: var(--muted);
+}
+.chart__table {
+  margin-top: 0.75rem;
+  font-size: 0.875rem;
+}
+.chart__table summary {
+  cursor: pointer;
+  color: var(--navy);
+  font-weight: 600;
+}
+.chart__table table {
+  margin-top: 0.5rem;
+}

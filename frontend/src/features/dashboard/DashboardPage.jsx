@@ -1,9 +1,11 @@
 import { Link } from 'react-router-dom'
 import { listAccounts } from '../../api/accounts'
+import { getMonthlyFlow } from '../../api/insights'
 import { searchTransactions } from '../../api/transactions'
 import { useApi } from '../../api/useApi'
 import { useLive } from '../notifications/LiveContext'
 import Alert from '../../components/Alert'
+import MonthlyFlowChart from '../../components/MonthlyFlowChart'
 import Spinner from '../../components/Spinner'
 import TransactionTable from '../../components/TransactionTable'
 import { useAuth } from '../auth/AuthContext'
@@ -108,6 +110,8 @@ function DashboardContent({ accounts, recent }) {
         </div>
       </section>
 
+      <MoneyFlowSection />
+
       <section aria-labelledby="recent-heading" className="section">
         <div className="section__header">
           <h2 id="recent-heading">Recent transactions</h2>
@@ -129,5 +133,25 @@ function DashboardContent({ accounts, recent }) {
         )}
       </section>
     </>
+  )
+}
+
+function MoneyFlowSection() {
+  const { moneyVersion } = useLive()
+  const flow = useApi((signal) => getMonthlyFlow({ months: 6 }, signal), [moneyVersion])
+
+  return (
+    <section className="section" aria-labelledby="flow-heading">
+      <h2 id="flow-heading">Money in vs out · last 6 months</h2>
+      <div className="card">
+        {flow.status === 'loading' && <Spinner label="Loading chart…" />}
+        {flow.status === 'error' && (
+          <Alert kind="error" onRetry={flow.reload}>
+            {flow.error.message}
+          </Alert>
+        )}
+        {flow.status === 'success' && <MonthlyFlowChart months={flow.data.months} currency={flow.data.currency} />}
+      </div>
+    </section>
   )
 }
