@@ -9,6 +9,7 @@ import DashboardPage from './features/dashboard/DashboardPage'
 import HistoryPage from './features/transactions/HistoryPage'
 import TransferPage from './features/transactions/TransferPage'
 import AppLayout from './layouts/AppLayout'
+import HomePage from './pages/HomePage'
 import NotFoundPage from './pages/NotFoundPage'
 import ProfilePage from './pages/ProfilePage'
 import ProtectedRoute from './routes/ProtectedRoute'
@@ -18,12 +19,15 @@ import RoleRoute from './routes/RoleRoute'
 export default function App() {
   return (
     <Routes>
+      {/* Public pages */}
+      <Route index element={<HomePage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
 
+      {/* Everything below needs a signed-in user */}
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
-          <Route index element={<DashboardPage />} />
+          <Route path="dashboard" element={<DashboardPage />} />
           <Route path="accounts" element={<AccountsPage />} />
           <Route path="accounts/:id" element={<AccountDetailPage />} />
           <Route path="transactions" element={<HistoryPage />} />

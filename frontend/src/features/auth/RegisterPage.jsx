@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
 import Alert from '../../components/Alert'
+import PublicHeader from '../../components/PublicHeader'
+import SiteFooter from '../../components/SiteFooter'
 import { register } from '../../api/auth'
 import { useAuth } from './AuthContext'
 
@@ -16,7 +18,7 @@ export default function RegisterPage() {
   const [submitting, setSubmitting] = useState(false)
 
   if (status === 'authenticated') {
-    return <Navigate to="/" replace />
+    return <Navigate to="/dashboard" replace />
   }
 
   function update(field) {
@@ -41,7 +43,7 @@ export default function RegisterPage() {
     try {
       await register(form.fullName.trim(), form.email.trim(), form.password)
       await login(form.email.trim(), form.password)
-      navigate('/', { replace: true })
+      navigate('/dashboard', { replace: true })
     } catch (err) {
       // Show the server's per-field messages next to the matching inputs.
       const serverErrors = Object.fromEntries((err.fieldErrors ?? []).map((f) => [f.field, f.message]))
@@ -59,39 +61,43 @@ export default function RegisterPage() {
   ]
 
   return (
-    <div className="auth-page">
-      <form className="card auth-card" onSubmit={handleSubmit} noValidate>
-        <h1>Create a demo account</h1>
-        <p className="muted">Use made-up details only. This is not a real bank.</p>
-        {error && <Alert kind="error">{error}</Alert>}
+    <div className="public-page">
+      <PublicHeader />
+      <main id="main" className="auth-page">
+        <form className="card auth-card" onSubmit={handleSubmit} noValidate>
+          <h1>Create a demo account</h1>
+          <p className="muted">Use made-up details only. This is not a real bank.</p>
+          {error && <Alert kind="error">{error}</Alert>}
 
-        {fields.map((f) => (
-          <div className="field" key={f.name}>
-            <label htmlFor={f.name}>{f.label}</label>
-            <input
-              id={f.name}
-              type={f.type}
-              autoComplete={f.autoComplete}
-              value={form[f.name]}
-              onChange={update(f.name)}
-              aria-invalid={Boolean(fieldErrors[f.name])}
-              aria-describedby={fieldErrors[f.name] ? `${f.name}-error` : undefined}
-            />
-            {fieldErrors[f.name] && (
-              <p id={`${f.name}-error`} className="field__error">
-                {fieldErrors[f.name]}
-              </p>
-            )}
-          </div>
-        ))}
+          {fields.map((f) => (
+            <div className="field" key={f.name}>
+              <label htmlFor={f.name}>{f.label}</label>
+              <input
+                id={f.name}
+                type={f.type}
+                autoComplete={f.autoComplete}
+                value={form[f.name]}
+                onChange={update(f.name)}
+                aria-invalid={Boolean(fieldErrors[f.name])}
+                aria-describedby={fieldErrors[f.name] ? `${f.name}-error` : undefined}
+              />
+              {fieldErrors[f.name] && (
+                <p id={`${f.name}-error`} className="field__error">
+                  {fieldErrors[f.name]}
+                </p>
+              )}
+            </div>
+          ))}
 
-        <button type="submit" className="button button--primary button--block" disabled={submitting}>
-          {submitting ? 'Creating account…' : 'Create account'}
-        </button>
-        <p className="muted small">
-          Already registered? <Link to="/login">Sign in</Link>
-        </p>
-      </form>
+          <button type="submit" className="button button--primary button--block" disabled={submitting}>
+            {submitting ? 'Creating account…' : 'Create account'}
+          </button>
+          <p className="muted small">
+            Already registered? <Link to="/login">Sign in</Link>
+          </p>
+        </form>
+      </main>
+      <SiteFooter />
     </div>
   )
 }

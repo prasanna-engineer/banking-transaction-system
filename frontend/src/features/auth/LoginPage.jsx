@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import Alert from '../../components/Alert'
+import PublicHeader from '../../components/PublicHeader'
+import SiteFooter from '../../components/SiteFooter'
 import { useAuth } from './AuthContext'
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -15,7 +17,7 @@ export default function LoginPage() {
   const [error, setError] = useState(null)
   const [submitting, setSubmitting] = useState(false)
 
-  const redirectTo = location.state?.from?.pathname ?? '/'
+  const redirectTo = location.state?.from?.pathname ?? '/dashboard'
 
   if (status === 'authenticated') {
     return <Navigate to={redirectTo} replace />
@@ -45,64 +47,68 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="auth-page">
-      <form className="card auth-card" onSubmit={handleSubmit} noValidate>
-        <h1>Sign in</h1>
-        <p className="muted">Demo Bank · a portfolio project with fictional data</p>
+    <div className="public-page">
+      <PublicHeader />
+      <main id="main" className="auth-page">
+        <form className="card auth-card" onSubmit={handleSubmit} noValidate>
+          <h1>Sign in</h1>
+          <p className="muted">Demo Bank · a portfolio project with fictional data</p>
 
-        {sessionExpired && <Alert kind="info">Your session ended. Please sign in again.</Alert>}
-        {error && <Alert kind="error">{error}</Alert>}
+          {sessionExpired && <Alert kind="info">Your session ended. Please sign in again.</Alert>}
+          {error && <Alert kind="error">{error}</Alert>}
 
-        <div className="field">
-          <label htmlFor="email">Email</label>
-          <input
-            id="email"
-            type="email"
-            autoComplete="username"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            aria-invalid={Boolean(fieldErrors.email)}
-            aria-describedby={fieldErrors.email ? 'email-error' : undefined}
-          />
-          {fieldErrors.email && (
-            <p id="email-error" className="field__error">
-              {fieldErrors.email}
-            </p>
-          )}
-        </div>
+          <div className="field">
+            <label htmlFor="email">Email</label>
+            <input
+              id="email"
+              type="email"
+              autoComplete="username"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              aria-invalid={Boolean(fieldErrors.email)}
+              aria-describedby={fieldErrors.email ? 'email-error' : undefined}
+            />
+            {fieldErrors.email && (
+              <p id="email-error" className="field__error">
+                {fieldErrors.email}
+              </p>
+            )}
+          </div>
 
-        <div className="field">
-          <label htmlFor="password">Password</label>
-          <input
-            id="password"
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            aria-invalid={Boolean(fieldErrors.password)}
-            aria-describedby={fieldErrors.password ? 'password-error' : undefined}
-          />
-          {fieldErrors.password && (
-            <p id="password-error" className="field__error">
-              {fieldErrors.password}
-            </p>
-          )}
-        </div>
+          <div className="field">
+            <label htmlFor="password">Password</label>
+            <input
+              id="password"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              aria-invalid={Boolean(fieldErrors.password)}
+              aria-describedby={fieldErrors.password ? 'password-error' : undefined}
+            />
+            {fieldErrors.password && (
+              <p id="password-error" className="field__error">
+                {fieldErrors.password}
+              </p>
+            )}
+          </div>
 
-        <button type="submit" className="button button--primary button--block" disabled={submitting}>
-          {submitting ? 'Signing in…' : 'Sign in'}
-        </button>
+          <button type="submit" className="button button--primary button--block" disabled={submitting}>
+            {submitting ? 'Signing in…' : 'Sign in'}
+          </button>
 
-        <p className="muted small">
-          New here? <Link to="/register">Create a demo account</Link>
-        </p>
-        <details className="demo-hint">
-          <summary>Demo logins</summary>
-          <p>
-            asha@example.com, ravi@example.com (customers) or admin@example.com — password <code>Demo@12345</code>
+          <p className="muted small">
+            New here? <Link to="/register">Create a demo account</Link>
           </p>
-        </details>
-      </form>
+          <details className="demo-hint">
+            <summary>Demo logins</summary>
+            <p>
+              asha@example.com, ravi@example.com (customers) or admin@example.com — password <code>Demo@12345</code>
+            </p>
+          </details>
+        </form>
+      </main>
+      <SiteFooter />
     </div>
   )
 }
