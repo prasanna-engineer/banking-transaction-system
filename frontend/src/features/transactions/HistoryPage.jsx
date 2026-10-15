@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { listAccounts } from '../../api/accounts'
-import { searchTransactions } from '../../api/transactions'
+import { downloadStatement, searchTransactions } from '../../api/transactions'
 import { useApi } from '../../api/useApi'
 import { useLive } from '../notifications/LiveContext'
 import Alert from '../../components/Alert'
@@ -26,6 +26,7 @@ export default function HistoryPage() {
 
   const [draft, setDraft] = useState(applied)
   const [formError, setFormError] = useState(null)
+  const [downloading, setDownloading] = useState(false)
 
   const accounts = useApi((signal) => listAccounts(signal), [])
   const history = useApi(
@@ -56,6 +57,19 @@ export default function HistoryPage() {
     writeUrl(draft, 0) // new filters always start again at the first page
   }
 
+  // Exports exactly what the applied filters show (all pages, newest first).
+  async function handleDownload() {
+    setDownloading(true)
+    setFormError(null)
+    try {
+      await downloadStatement(applied)
+    } catch (err) {
+      setFormError(err.message)
+    } finally {
+      setDownloading(false)
+    }
+  }
+
   function handleReset() {
     const cleared = filtersFromUrl(new URLSearchParams())
     setDraft(cleared)
@@ -68,7 +82,12 @@ export default function HistoryPage() {
 
   return (
     <>
-      <h1>Transactions</h1>
+      <div className="section__header">
+        <h1>Transactions</h1>
+        <button type="button" className="button" onClick={handleDownload} disabled={downloading}>
+          {downloading ? 'Preparing…' : 'Download CSV'}
+        </button>
+      </div>
 
       <form className="card filters" onSubmit={handleApply} aria-label="Filter transactions">
         {myAccounts.length > 0 && (

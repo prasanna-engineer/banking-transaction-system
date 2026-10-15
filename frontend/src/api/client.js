@@ -49,6 +49,35 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Downloads a file (e.g. a CSV statement) with the bearer token and saves it in the browser.
+ * A plain <a href> link cannot send the Authorization header, so the file is fetched, then saved.
+ */
+export async function apiDownload(path, fallbackName) {
+  const token = tokenStore.get()
+  let response
+  try {
+    response = await fetch(API_BASE_URL + path, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+  } catch {
+    throw new ApiError(0, 'NETWORK_ERROR', 'Cannot reach the server. Is the backend running on port 8081?')
+  }
+  if (!response.ok) {
+    const data = await response.json().catch(() => null)
+    if (response.status === 401) unauthorizedHandler()
+    throw new ApiError(response.status, data?.code ?? `HTTP_${response.status}`, data?.message ?? 'Download failed.')
+  }
+  const disposition = response.headers.get('Content-Disposition') ?? ''
+  const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? fallbackName
+  const url = URL.createObjectURL(await response.blob())
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
 export async function apiRequest(path, { method = 'GET', body, auth = true, signal, headers: extraHeaders } = {}) {
   const headers = { Accept: 'application/json', ...extraHeaders }
   if (body !== undefined) {

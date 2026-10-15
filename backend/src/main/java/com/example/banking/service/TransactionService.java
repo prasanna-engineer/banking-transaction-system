@@ -8,8 +8,10 @@ import static com.example.banking.repository.TransactionSpecifications.involvesA
 import static com.example.banking.repository.TransactionSpecifications.involvesUser;
 
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Set;
 
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -26,6 +28,8 @@ import com.example.banking.repository.BankTransactionRepository;
 
 @Service
 public class TransactionService {
+
+	static final int MAX_EXPORT_ROWS = 10_000;
 
 	// Only these fields may be sorted on; anything else from the URL is rejected.
 	private static final Set<String> SORTABLE_FIELDS = Set.of("createdAt", "amount");
@@ -47,6 +51,28 @@ public class TransactionService {
 	public PageResponse<TransactionResponse> search(Long currentUserId, TransactionFilter filter, int page, int size,
 			String sort) {
 		User user = currentUserService.requireActiveUser(currentUserId);
+		return PageResponse.from(transactionRepository.findAll(buildSpec(user, filter), toPageable(page, size, sort)),
+				TransactionResponse::from);
+	}
+
+	/**
+	 * The same filters and ownership rules as {@link #search}, as one CSV file (newest first).
+	 * Capped at {@value #MAX_EXPORT_ROWS} rows so an export can never become an unbounded data dump.
+	 */
+	@Transactional(readOnly = true)
+	public String exportCsv(Long currentUserId, TransactionFilter filter) {
+		User user = currentUserService.requireActiveUser(currentUserId);
+		Pageable firstRows = PageRequest.of(0, MAX_EXPORT_ROWS + 1,
+				Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by(Sort.Direction.DESC, "id")));
+		List<BankTransaction> rows = transactionRepository.findAll(buildSpec(user, filter), firstRows).getContent();
+		if (rows.size() > MAX_EXPORT_ROWS) {
+			throw ApiException.badRequest("EXPORT_TOO_LARGE",
+					"More than " + MAX_EXPORT_ROWS + " transactions match. Narrow the date range and try again.");
+		}
+		return TransactionCsv.write(rows, user.isAdmin() ? null : user.getId());
+	}
+
+	private Specification<BankTransaction> buildSpec(User user, TransactionFilter filter) {
 		if (filter.from() != null && filter.to() != null && filter.from().isAfter(filter.to())) {
 			throw ApiException.badRequest("INVALID_DATE_RANGE", "'from' must not be after 'to'.");
 		}
@@ -72,9 +98,7 @@ public class TransactionService {
 		if (filter.to() != null) {
 			spec = spec.and(createdBefore(filter.to().plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC)));
 		}
-
-		return PageResponse.from(transactionRepository.findAll(spec, toPageable(page, size, sort)),
-				TransactionResponse::from);
+		return spec;
 	}
 
 	@Transactional(readOnly = true)

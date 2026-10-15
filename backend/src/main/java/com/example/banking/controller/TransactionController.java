@@ -1,8 +1,14 @@
 package com.example.banking.controller;
 
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -43,6 +49,22 @@ public class TransactionController {
 			@RequestParam(defaultValue = "createdAt,desc") String sort) {
 		return transactionService.search(currentUserId, new TransactionFilter(accountId, from, to, type, status), page,
 				size, sort);
+	}
+
+	/** Same filters as the list, as a downloadable CSV statement. */
+	@GetMapping(path = "/export", produces = "text/csv")
+	public ResponseEntity<String> export(@CurrentUserId Long currentUserId,
+			@RequestParam(required = false) Long accountId,
+			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+			@RequestParam(required = false) TransactionType type,
+			@RequestParam(required = false) TransactionStatus status) {
+		String csv = transactionService.exportCsv(currentUserId, new TransactionFilter(accountId, from, to, type, status));
+		String filename = "transactions-" + LocalDate.now(ZoneOffset.UTC) + ".csv";
+		return ResponseEntity.ok()
+			.contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
+			.header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment().filename(filename).build().toString())
+			.body(csv);
 	}
 
 	@GetMapping("/{id}")
