@@ -55,7 +55,7 @@ class BankAccountRepositoryTest {
 	@Test
 	void findsOnlyAccountsBelongingToTheGivenUser() {
 		assertThat(accountRepository.findByUserIdOrderByIdAsc(alice.getId()))
-			.extracting(BankAccount::getAccountNumber)
+			.extracting(account -> account.getAccountNumber())
 			.containsExactly("900000000001", "900000000002");
 	}
 

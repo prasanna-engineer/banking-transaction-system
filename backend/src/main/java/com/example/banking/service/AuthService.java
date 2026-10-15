@@ -60,7 +60,7 @@ public class AuthService {
 	public LoginResponse login(LoginRequest request) {
 		Optional<User> found = userRepository.findByEmail(User.normalizeEmail(request.email()));
 		boolean passwordMatches = passwordEncoder.matches(request.password(),
-				found.map(User::getPasswordHash).orElse(dummyPasswordHash));
+				found.map(user -> user.getPasswordHash()).orElse(dummyPasswordHash));
 		// One message for every failure: unknown email, wrong password or disabled account.
 		User user = found.filter(u -> passwordMatches && u.isActive())
 			.orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS",

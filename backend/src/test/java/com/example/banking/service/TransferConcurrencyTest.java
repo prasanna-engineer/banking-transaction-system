@@ -76,7 +76,7 @@ class TransferConcurrencyTest {
 		List<Outcome> outcomes = runConcurrently(20, i -> () -> transferService.transfer(owner.getId(),
 				new TransferRequest(source.getId(), destination.getId(), new BigDecimal("10.00"), "race " + i)));
 
-		assertThat(outcomes.stream().filter(Outcome::succeeded).count()).isEqualTo(10);
+		assertThat(outcomes.stream().filter(outcome -> outcome.succeeded()).count()).isEqualTo(10);
 		assertThat(outcomes.stream().filter(o -> "INSUFFICIENT_FUNDS".equals(o.errorCode())).count()).isEqualTo(10);
 		assertThat(balanceOf(source)).isEqualByComparingTo("0.00");
 		assertThat(balanceOf(destination)).isEqualByComparingTo("100.00");
@@ -97,7 +97,7 @@ class TransferConcurrencyTest {
 					aToB ? b.getId() : a.getId(), new BigDecimal("1.00"), "swap " + i));
 		});
 
-		assertThat(outcomes).allMatch(Outcome::succeeded);
+		assertThat(outcomes).allMatch(outcome -> outcome.succeeded());
 		assertThat(balanceOf(a)).isEqualByComparingTo("100.00");
 		assertThat(balanceOf(b)).isEqualByComparingTo("100.00");
 		assertThat(transactionCount(a)).isEqualTo(80);

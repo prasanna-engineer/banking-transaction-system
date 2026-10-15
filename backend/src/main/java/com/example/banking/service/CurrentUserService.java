@@ -28,7 +28,7 @@ public class CurrentUserService {
 	 */
 	@Transactional(readOnly = true)
 	public User requireActiveUser(Long userId) {
-		return userRepository.findById(userId).filter(User::isActive).orElseThrow(ApiException::unauthenticated);
+		return userRepository.findById(userId).filter(user -> user.isActive()).orElseThrow(ApiException::unauthenticated);
 	}
 
 }
