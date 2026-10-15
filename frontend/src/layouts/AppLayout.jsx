@@ -1,9 +1,14 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../features/auth/AuthContext'
 
+// roles: who sees the link. Hiding a link is only convenience - the API enforces the real rules.
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', end: true },
-  { to: '/accounts', label: 'My accounts' },
+  { to: '/accounts', label: 'My accounts', roles: ['CUSTOMER'] },
+  { to: '/transfer', label: 'Transfer', roles: ['CUSTOMER'] },
+  { to: '/transactions', label: 'Transactions' },
+  { to: '/admin/users', label: 'Users', roles: ['ADMIN'] },
+  { to: '/admin/audit-logs', label: 'Audit log', roles: ['ADMIN'] },
   { to: '/profile', label: 'Profile' },
 ]
 
@@ -28,7 +33,7 @@ export default function AppLayout() {
         </div>
         <nav>
           <ul className="nav-list">
-            {NAV_ITEMS.map((item) => (
+            {NAV_ITEMS.filter((item) => !item.roles || item.roles.includes(user?.role)).map((item) => (
               <li key={item.to}>
                 <NavLink to={item.to} end={item.end} className="nav-link">
                   {item.label}

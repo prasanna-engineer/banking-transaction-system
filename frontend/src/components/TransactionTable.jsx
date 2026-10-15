@@ -7,6 +7,8 @@ import { formatMoney } from '../utils/money'
  * and a move between two of their own accounts is "Internal".
  */
 function direction(tx, myAccountIds) {
+  // An admin owns no accounts, so there is no "my side" - show amounts without a sign.
+  if (myAccountIds.size === 0) return 'neutral'
   const fromMine = tx.sourceAccountId != null && myAccountIds.has(tx.sourceAccountId)
   const toMine = tx.destinationAccountId != null && myAccountIds.has(tx.destinationAccountId)
   if (fromMine && toMine) return 'internal'
@@ -14,7 +16,7 @@ function direction(tx, myAccountIds) {
   return 'credit'
 }
 
-const SIGN = { credit: '+', debit: '−', internal: '' }
+const SIGN = { credit: '+', debit: '−', internal: '', neutral: '' }
 
 export default function TransactionTable({ transactions, myAccountIds, caption }) {
   return (
@@ -47,7 +49,7 @@ export default function TransactionTable({ transactions, myAccountIds, caption }
                   <span className="badge">{titleCase(tx.status)}</span>
                 </td>
                 <td className={`num amount amount--${kind}`}>
-                  <span className="visually-hidden">{kind} </span>
+                  {kind !== 'neutral' && <span className="visually-hidden">{kind} </span>}
                   {SIGN[kind]}
                   {formatMoney(tx.amount, tx.currency)}
                 </td>

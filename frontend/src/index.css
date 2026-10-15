@@ -375,6 +375,105 @@ code {
   margin: 0;
 }
 
+/* ---- Milestone 7: forms, filters, steps ---- */
+.form-card {
+  max-width: 560px;
+}
+.field select,
+.field input[type='date'] {
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font: inherit;
+  background: var(--surface);
+}
+fieldset.field {
+  border: none;
+  padding: 0;
+}
+fieldset.field legend {
+  font-weight: 600;
+  margin-bottom: 0.3rem;
+}
+.radio {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.25rem 0;
+  font-weight: normal !important;
+}
+.field__hint {
+  margin: 0.3rem 0 0;
+}
+.button-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+a.button {
+  text-decoration: none;
+  display: inline-block;
+}
+.section__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+.section__header h2 {
+  margin: 0;
+}
+.steps {
+  display: flex;
+  gap: 0.5rem;
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1.25rem;
+  counter-reset: step;
+}
+.steps li {
+  counter-increment: step;
+  padding: 0.3rem 0.8rem;
+  border-radius: 999px;
+  background: #e6ecf2;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+.steps li::before {
+  content: counter(step) '. ';
+}
+.steps li[aria-current='step'] {
+  background: var(--primary);
+  color: #fff;
+  font-weight: 600;
+}
+.filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0 1rem;
+  align-items: end;
+}
+.filters__actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+.badge--active {
+  background: #e3f3e8;
+  color: var(--credit);
+}
+.badge--disabled {
+  background: var(--error-bg);
+  color: #7a1c15;
+}
+.pager-summary {
+  margin-top: 0.75rem;
+}
+
 /* ---- Small screens: the rail becomes a top bar ---- */
 @media (max-width: 760px) {
   .shell {

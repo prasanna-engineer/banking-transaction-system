@@ -196,6 +196,41 @@ class TransferControllerTest {
 	}
 
 	@Test
+	void destinationCanBeGivenByAccountNumber() throws Exception {
+		transferJson(asha, """
+				{"sourceAccountId":%d,"destinationAccountNumber":"700000000003","amount":"40.00"}
+				""".formatted(ashaSavings.getId()))
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.destinationAccountId").value(raviSavings.getId()));
+		assertBalance(raviSavings, "340.00");
+	}
+
+	@Test
+	void unknownDestinationAccountNumberIsNotFound() throws Exception {
+		transferJson(asha, """
+				{"sourceAccountId":%d,"destinationAccountNumber":"799999999999","amount":"40.00"}
+				""".formatted(ashaSavings.getId()))
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.code").value("ACCOUNT_NOT_FOUND"));
+		assertUnchanged();
+	}
+
+	@Test
+	void exactlyOneDestinationMustBeGiven() throws Exception {
+		transferJson(asha, """
+				{"sourceAccountId":%d,"destinationAccountId":%d,"destinationAccountNumber":"700000000003","amount":"1.00"}
+				""".formatted(ashaSavings.getId(), raviSavings.getId()))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.fieldErrors[0].field").value("destination"));
+		transferJson(asha, """
+				{"sourceAccountId":%d,"amount":"1.00"}
+				""".formatted(ashaSavings.getId()))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+		assertUnchanged();
+	}
+
+	@Test
 	void missingFieldsAreValidationErrors() throws Exception {
 		mockMvc.perform(post("/api/v1/transfers").header(HttpHeaders.AUTHORIZATION, bearer(asha))
 			.contentType(MediaType.APPLICATION_JSON)
@@ -223,6 +258,12 @@ class TransferControllerTest {
 			.content("""
 					{"sourceAccountId":%d,"destinationAccountId":%d,"amount":%s,"description":"Test"}
 					""".formatted(source.getId(), destination.getId(), amountJson)));
+	}
+
+	private ResultActions transferJson(User caller, String json) throws Exception {
+		return mockMvc.perform(post("/api/v1/transfers").header(HttpHeaders.AUTHORIZATION, bearer(caller))
+			.contentType(MediaType.APPLICATION_JSON)
+			.content(json));
 	}
 
 	private void assertUnchanged() {

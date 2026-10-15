@@ -4,6 +4,7 @@ import { getAccount } from '../../api/accounts'
 import { searchTransactions } from '../../api/transactions'
 import { useApi } from '../../api/useApi'
 import Alert from '../../components/Alert'
+import Pager from '../../components/Pager'
 import Spinner from '../../components/Spinner'
 import TransactionTable from '../../components/TransactionTable'
 import { formatDateTime, titleCase } from '../../utils/format'
@@ -83,27 +84,7 @@ function AccountTransactions({ accountId }) {
             myAccountIds={new Set([accountId])}
             caption="Transactions for this account"
           />
-          <nav className="pager" aria-label="Pagination">
-            <button
-              type="button"
-              className="button button--ghost"
-              disabled={history.data.first}
-              onClick={() => setPage((p) => p - 1)}
-            >
-              ← Newer
-            </button>
-            <span className="muted small">
-              Page {history.data.page + 1} of {history.data.totalPages} · {history.data.totalElements} total
-            </span>
-            <button
-              type="button"
-              className="button button--ghost"
-              disabled={history.data.last}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              Older →
-            </button>
-          </nav>
+          <Pager pageData={history.data} onPageChange={setPage} newerOlder />
         </>
       )}
     </section>

@@ -21,6 +21,10 @@ public interface BankAccountRepository extends JpaRepository<BankAccount, Long> 
 
 	Optional<BankAccount> findByAccountNumber(String accountNumber);
 
+	// Returns only the id (not the entity), for the same stale-cache reason as existsByIdAndUserId below.
+	@Query("select a.id from BankAccount a where a.accountNumber = :accountNumber")
+	Optional<Long> findIdByAccountNumber(@Param("accountNumber") String accountNumber);
+
 	// Checks ownership without loading the entity. Loading it here would put an unlocked copy in
 	// Hibernate's cache, and the later FOR UPDATE query would hand back that stale copy.
 	boolean existsByIdAndUserId(Long id, Long userId);

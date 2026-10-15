@@ -129,9 +129,8 @@ class JwtSecurityTest {
 
 	@Test
 	void adminPassesTheAdminRule() throws Exception {
-		// No admin endpoints exist yet (Milestone 7), so getting past security means a 404, not a 403.
 		mockMvc.perform(get("/api/v1/admin/users").header(HttpHeaders.AUTHORIZATION, bearer(validToken(admin))))
-			.andExpect(status().isNotFound());
+			.andExpect(status().isOk());
 	}
 
 	@Test

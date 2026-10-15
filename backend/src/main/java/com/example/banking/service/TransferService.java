@@ -69,7 +69,9 @@ public class TransferService {
 		// Bean Validation already rejected <= 0 and > 2 decimals; normalise to exactly 2 (never rounds).
 		BigDecimal amount = request.amount().setScale(2, RoundingMode.UNNECESSARY);
 		Long sourceId = request.sourceAccountId();
-		Long destinationId = request.destinationAccountId();
+		Long destinationId = request.destinationAccountId() != null ? request.destinationAccountId()
+				: accountRepository.findIdByAccountNumber(request.destinationAccountNumber())
+					.orElseThrow(TransferService::accountNotFound);
 
 		// 1. Cheap checks first, before touching any locks.
 		if (amount.compareTo(properties.maxAmount()) > 0) {

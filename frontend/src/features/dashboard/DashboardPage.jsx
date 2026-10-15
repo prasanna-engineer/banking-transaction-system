@@ -11,6 +11,33 @@ import { formatMoney, sumAmounts } from '../../utils/money'
 
 export default function DashboardPage() {
   const { user } = useAuth()
+  return user?.role === 'ADMIN' ? <AdminHome name={user.fullName} /> : <CustomerDashboard user={user} />
+}
+
+function AdminHome({ name }) {
+  return (
+    <>
+      <h1>Hello, {name?.split(' ')[0]}</h1>
+      <p className="muted">You are signed in as an administrator. Administrators inspect activity but do not move money.</p>
+      <div className="cards">
+        <Link to="/admin/users" className="card card--link">
+          <h2>Users</h2>
+          <p className="muted small">Search demo users and enable or disable them.</p>
+        </Link>
+        <Link to="/admin/audit-logs" className="card card--link">
+          <h2>Audit log</h2>
+          <p className="muted small">Who did what, and when.</p>
+        </Link>
+        <Link to="/transactions" className="card card--link">
+          <h2>All transactions</h2>
+          <p className="muted small">Every transfer and deposit in the system.</p>
+        </Link>
+      </div>
+    </>
+  )
+}
+
+function CustomerDashboard({ user }) {
   // Both requests start together; the page waits for both.
   const { status, data, error, reload } = useApi(
     (signal) =>
@@ -37,7 +64,7 @@ function DashboardContent({ accounts, recent }) {
     return (
       <div className="card empty">
         <h2>No accounts yet</h2>
-        <p className="muted">Demo accounts are created by the administrator.</p>
+        <p className="muted">No bank accounts are linked to this login yet. Try a demo customer such as asha@example.com.</p>
       </div>
     )
   }
@@ -82,6 +109,14 @@ function DashboardContent({ accounts, recent }) {
       <section aria-labelledby="recent-heading" className="section">
         <div className="section__header">
           <h2 id="recent-heading">Recent transactions</h2>
+          <div className="button-row">
+            <Link to="/transfer" className="button button--primary button--small">
+              New transfer
+            </Link>
+            <Link to="/transactions" className="button button--small">
+              View all
+            </Link>
+          </div>
         </div>
         {recent.length === 0 ? (
           <div className="card empty">

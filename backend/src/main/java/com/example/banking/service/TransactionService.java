@@ -10,7 +10,6 @@ import static com.example.banking.repository.TransactionSpecifications.involvesU
 import java.time.ZoneOffset;
 import java.util.Set;
 
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -27,8 +26,6 @@ import com.example.banking.repository.BankTransactionRepository;
 
 @Service
 public class TransactionService {
-
-	static final int MAX_PAGE_SIZE = 100;
 
 	// Only these fields may be sorted on; anything else from the URL is rejected.
 	private static final Set<String> SORTABLE_FIELDS = Set.of("createdAt", "amount");
@@ -91,9 +88,6 @@ public class TransactionService {
 
 	/** "createdAt,desc" -> Pageable. id is always added as a tie-breaker so page boundaries are stable. */
 	private static Pageable toPageable(int page, int size, String sort) {
-		if (page < 0) {
-			throw ApiException.badRequest("INVALID_PAGE", "'page' must be 0 or greater.");
-		}
 		String[] parts = sort.split(",");
 		String field = parts[0].trim();
 		String direction = parts.length > 1 ? parts[1].trim() : "desc";
@@ -102,8 +96,7 @@ public class TransactionService {
 			throw ApiException.badRequest("INVALID_SORT", "Sort must be one of " + SORTABLE_FIELDS
 					+ " optionally followed by ',asc' or ',desc'.");
 		}
-		Sort.Direction dir = Sort.Direction.fromString(direction);
-		return PageRequest.of(page, Math.clamp(size, 1, MAX_PAGE_SIZE), Sort.by(dir, field).and(Sort.by(dir, "id")));
+		return Paging.of(page, size, Sort.Direction.fromString(direction), field);
 	}
 
 }

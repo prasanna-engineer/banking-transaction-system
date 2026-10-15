@@ -72,6 +72,10 @@ public class User {
 		return status == UserStatus.ACTIVE;
 	}
 
+	public void changeStatus(UserStatus newStatus) {
+		this.status = newStatus;
+	}
+
 	@PrePersist
 	void onCreate() {
 		createdAt = Instant.now();
