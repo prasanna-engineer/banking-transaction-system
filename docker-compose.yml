@@ -1,0 +1,51 @@
+# Runs the whole application with one command:   docker compose up --build
+# Then open http://localhost:5173 (API: http://localhost:8081, Swagger: http://localhost:8081/swagger-ui.html).
+#
+# Values like ${JWT_SECRET} are read from the .env file next to this file (see .env.example).
+# The database here is a separate, fresh MariaDB inside Docker - it does not touch XAMPP.
+
+services:
+  db:
+    image: mariadb:11.4
+    environment:
+      MARIADB_DATABASE: banking_mgmt_db
+      MARIADB_USER: banking_app
+      MARIADB_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?Set SPRING_DATASOURCE_PASSWORD in .env}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Set DB_ROOT_PASSWORD in .env}
+    volumes:
+      - db-data:/var/lib/mysql
+    # Not published to the host on purpose: only the backend can reach the database
+    # (this also avoids clashing with XAMPP on port 3306).
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    build: ./backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mariadb://db:3306/banking_mgmt_db
+      SPRING_DATASOURCE_USERNAME: banking_app
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET (at least 32 characters) in .env}
+      CORS_ALLOWED_ORIGINS: http://localhost:5173
+    ports:
+      - "8081:8081"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # The browser calls the API directly, so this is the address as seen from your machine.
+        VITE_API_BASE_URL: http://localhost:8081/api/v1
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+
+volumes:
+  db-data:

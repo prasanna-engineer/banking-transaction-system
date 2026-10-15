@@ -20,7 +20,9 @@ MariaDB / MySQL · React 18 · Vite 5 · JUnit 5 · Mockito · OpenAPI / Swagger
 - [Database design](#database-design)
 - [API overview](#api-overview)
 - [Getting started](#getting-started)
+- [Run everything with Docker](#run-everything-with-docker)
 - [Running the tests](#running-the-tests)
+- [Deployment](docs/DEPLOYMENT.md)
 - [Security notes](#security-notes)
 - [Known limitations](#known-limitations)
 - [Project structure](#project-structure)
@@ -45,6 +47,8 @@ MariaDB / MySQL · React 18 · Vite 5 · JUnit 5 · Mockito · OpenAPI / Swagger
   can never overdraw an account or deadlock; `@Version` optimistic locking as a second safety net.
   Integration tests run 20 competing transfers and 80 opposing transfers at once, and were verified to
   **fail when the locking is removed**.
+- **Idempotent transfers:** an `Idempotency-Key` header makes retries safe — repeating a request (even
+  10 copies at the same instant) moves money once and returns the original result.
 - **Money handled exactly:** `DECIMAL(19,2)` + `BigDecimal` on the server; amounts travel as JSON strings
   (`"250.75"`); over-precise amounts are rejected, never rounded; the frontend never does balance arithmetic.
 - **Defence in depth:** Bean Validation, service-level rules, entity guards and database `CHECK` constraints.
@@ -179,7 +183,8 @@ All endpoints are under `/api/v1`. Interactive documentation: **http://localhost
 $token = (Invoke-RestMethod -Method Post http://localhost:8081/api/v1/auth/login -ContentType 'application/json' `
   -Body '{"email":"asha@example.com","password":"Demo@12345"}').accessToken
 
-Invoke-RestMethod -Method Post http://localhost:8081/api/v1/transfers -Headers @{ Authorization = "Bearer $token" } `
+Invoke-RestMethod -Method Post http://localhost:8081/api/v1/transfers `
+  -Headers @{ Authorization = "Bearer $token"; 'Idempotency-Key' = [guid]::NewGuid().ToString() } `
   -ContentType 'application/json' `
   -Body '{"sourceAccountId":1,"destinationAccountNumber":"100000000003","amount":"25.00","description":"Lunch"}'
 ```
@@ -191,6 +196,7 @@ TOKEN=$(curl -s -X POST http://localhost:8081/api/v1/auth/login -H 'Content-Type
   -d '{"email":"asha@example.com","password":"Demo@12345"}' | sed -E 's/.*"accessToken":"([^"]+)".*/\1/')
 
 curl -X POST http://localhost:8081/api/v1/transfers -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -H "Idempotency-Key: $(uuidgen)" \
   -d '{"sourceAccountId":1,"destinationAccountNumber":"100000000003","amount":"25.00","description":"Lunch"}'
 ```
 
@@ -289,6 +295,29 @@ Demo data is loaded only in development (`db/seed`); the test database never rec
 
 ---
 
+## Run everything with Docker
+
+Instead of steps 2–5 above, Docker can start a fresh MariaDB 11.4, the backend and the frontend together
+(Docker Desktop required). In `.env` set `SPRING_DATASOURCE_PASSWORD`, `JWT_SECRET` and `DB_ROOT_PASSWORD`, then:
+
+```bash
+docker compose up --build        # first run builds the images; later runs start in seconds
+```
+
+| URL | What |
+|---|---|
+| http://localhost:5173 | React app (nginx) |
+| http://localhost:8081/swagger-ui.html | API docs |
+
+The Docker database is separate from XAMPP and is not exposed to the host. `docker compose down` stops
+everything; `docker compose down -v` also deletes the Docker database volume.
+
+> Status: the packaged jar has been verified to run with environment-only configuration, but the Docker
+> images themselves have not been built on the author's machine yet (Docker was not installed). Please
+> report any problem.
+
+---
+
 ## Running the tests
 
 ```powershell
@@ -300,18 +329,31 @@ cd backend
 The tests run against the real **`banking_mgmt_test_db`** database (MariaDB must be running), so
 constraints, locking and SQL behave exactly as in development.
 
-**Status (15 Oct 2026): 74 tests, 0 failures** on Java 21 / MariaDB 10.4, covering:
+**Status (15 Oct 2026): 80 backend tests and 18 frontend tests, 0 failures** (backend on Java 21 /
+MariaDB 10.4), covering:
 
 | Area | Examples |
 |---|---|
 | Transfers | success moves the exact amount; zero/negative/3-decimal amounts, insufficient funds, same account, inactive account, currency mismatch, someone else's account — all rejected with balances unchanged |
 | Concurrency & rollback | 20 simultaneous transfers never overdraw; 80 opposing transfers never deadlock; a failure injected after the debit and credit rolls everything back |
+| Idempotency | a retried request replays the original transfer; 10 simultaneous duplicates move money once; same key with different data → 409; a failed attempt does not consume its key |
 | Security | missing, expired, edited (`role` changed to ADMIN), attacker-key-signed and wrong-issuer tokens rejected; customers get 403 on admin endpoints; CORS only for the configured origin |
 | Ownership | other customers' accounts and transactions return 404 |
 | Auth | passwords stored as BCrypt hashes; duplicate email 409; same message for wrong password and unknown email; disabled users locked out even with a valid token |
 | Errors | consistent JSON, no stack traces or SQL in responses; lock conflicts return 409 |
 
-Frontend: `cd frontend && npm run build` (no automated frontend tests yet).
+Frontend (Vitest + Testing Library, ESLint):
+
+```bash
+cd frontend
+npm test          # exact money maths, transaction direction, transfer validation, idempotency-key reuse
+npm run lint
+npm run build
+```
+
+**Continuous integration:** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs all backend tests
+against a fresh MariaDB 11.4, plus frontend lint, tests and build, on every push (see the repository's
+**Actions** tab).
 
 ---
 
@@ -338,15 +380,18 @@ Frontend: `cd frontend && npm run build` (no automated frontend tests yet).
 
 ## Known limitations
 
-- **No idempotency key yet:** a client that retries a transfer after a network timeout could submit it twice.
-  An `Idempotency-Key` header is the planned next step.
+- **Idempotency keys are optional** for API clients (the web app always sends one). Keys are kept
+  indefinitely; a production system would expire them after e.g. 24 hours.
 - **No refresh tokens or logout revocation:** access tokens last 30 minutes.
 - **No rate limiting** on login.
 - Rejected transfer attempts are not audited (the audit row rolls back with the failed transaction).
 - Developed on **MariaDB 10.4** (XAMPP), which Hibernate 7 reports as below its supported minimum (10.6);
   everything passes, but a newer MariaDB or MySQL 8 is recommended. MySQL 8 has not been tested yet.
-- Frontend targets Node 18, so it pins Vite 5 / React Router 6 and has no ESLint setup yet.
-- No Docker setup or deployment yet.
+- Frontend tooling is pinned to versions that still run on Node 18 (Vite 5, React Router 6, Vitest 2,
+  ESLint 8 — the last is out of support). Moving to Node 22 LTS would allow current versions.
+- Docker images are written but not yet built and run on the author's machine; there is no public
+  deployment yet (see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)).
+- No screenshots in this README yet.
 
 ---
 
@@ -354,14 +399,15 @@ Frontend: `cd frontend && npm run build` (no automated frontend tests yet).
 
 ```text
 banking-transaction-system/
+├── .github/workflows/ci.yml      CI: backend tests on MariaDB, frontend lint/tests/build
 ├── backend/                      Spring Boot API
-│   ├── pom.xml, mvnw, mvnw.cmd
+│   ├── pom.xml, mvnw, mvnw.cmd, Dockerfile
 │   └── src/
 │       ├── main/java/com/example/banking/
 │       │   ├── config/           OpenAPI configuration
 │       │   ├── controller/       REST controllers
 │       │   ├── dto/              request/response records (auth, account, transaction, transfer, admin, user)
-│       │   ├── entity/           JPA entities (User, BankAccount, BankTransaction, AuditLog)
+│       │   ├── entity/           JPA entities (User, BankAccount, BankTransaction, AuditLog, IdempotencyRecord)
 │       │   ├── enums/            Role, statuses, types
 │       │   ├── exception/        ApiException, GlobalExceptionHandler
 │       │   ├── repository/       Spring Data repositories and query specifications
@@ -372,12 +418,15 @@ banking-transaction-system/
 │       │   └── db/migration/, db/seed/   Flyway schema and dev-only demo data
 │       └── test/                 integration, security, concurrency and unit tests
 ├── frontend/                     React + Vite
+│   ├── Dockerfile, nginx.conf    production build served by nginx
 │   └── src/
 │       ├── api/                  the only code that calls the backend
 │       ├── components/           shared UI (tables, pager, alerts)
 │       ├── features/             auth, dashboard, accounts, transactions, admin
 │       ├── layouts/, pages/, routes/
-│       └── utils/                exact money formatting, dates
+│       └── utils/                exact money formatting, dates (tests live next to the code: *.test.js[x])
+├── docs/DEPLOYMENT.md            how to put the demo online
+├── docker-compose.yml            MariaDB + backend + frontend in one command
 ├── .env.example                  configuration placeholders
 └── README.md
 ```
