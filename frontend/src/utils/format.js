@@ -1,12 +1,22 @@
-const currency = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' })
-const dateTime = new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
+/** The API sends UTC timestamps; the browser shows them in the user's local time zone. */
+export function formatDateTime(iso) {
+  if (!iso) {
+    return ''
+  }
+  return new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
+}
 
-export const formatMoney = (value) => currency.format(Number(value ?? 0))
+/** "100000000001" -> "•••• 0001" */
+export function maskAccountNumber(accountNumber) {
+  if (!accountNumber) {
+    return ''
+  }
+  return `•••• ${accountNumber.slice(-4)}`
+}
 
-export const formatDateTime = (iso) => (iso ? dateTime.format(new Date(iso)) : '')
-
-export const formatLabel = (value) =>
-  (value ?? '').toLowerCase().split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
-
-// Amount strings typed by the user: positive, at most 2 decimals.
-export const isValidAmount = (value) => /^\d+(\.\d{1,2})?$/.test(value) && Number(value) > 0
+export function titleCase(value) {
+  if (!value) {
+    return ''
+  }
+  return value.charAt(0) + value.slice(1).toLowerCase()
+}

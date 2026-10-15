@@ -1,27 +1,29 @@
-import { Link, Route, Routes } from 'react-router-dom'
-import Layout from './components/Layout'
-import Dashboard from './pages/Dashboard'
-import CreateAccount from './pages/CreateAccount'
-import AccountDetail from './pages/AccountDetail'
-import Transfer from './pages/Transfer'
+import { Route, Routes } from 'react-router-dom'
+import AccountDetailPage from './features/accounts/AccountDetailPage'
+import AccountsPage from './features/accounts/AccountsPage'
+import LoginPage from './features/auth/LoginPage'
+import RegisterPage from './features/auth/RegisterPage'
+import DashboardPage from './features/dashboard/DashboardPage'
+import AppLayout from './layouts/AppLayout'
+import NotFoundPage from './pages/NotFoundPage'
+import ProfilePage from './pages/ProfilePage'
+import ProtectedRoute from './routes/ProtectedRoute'
 
+/** The route table (like Laravel's routes/web.php). Nested routes render inside their parent's <Outlet />. */
 export default function App() {
   return (
     <Routes>
-      <Route element={<Layout />}>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/accounts/new" element={<CreateAccount />} />
-        <Route path="/accounts/:accountNumber" element={<AccountDetail />} />
-        <Route path="/transfer" element={<Transfer />} />
-        <Route
-          path="*"
-          element={
-            <div className="card">
-              <h1>Page not found</h1>
-              <Link to="/">Back to dashboard</Link>
-            </div>
-          }
-        />
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
+
+      <Route element={<ProtectedRoute />}>
+        <Route element={<AppLayout />}>
+          <Route index element={<DashboardPage />} />
+          <Route path="accounts" element={<AccountsPage />} />
+          <Route path="accounts/:id" element={<AccountDetailPage />} />
+          <Route path="profile" element={<ProfilePage />} />
+          <Route path="*" element={<NotFoundPage />} />
+        </Route>
       </Route>
     </Routes>
   )

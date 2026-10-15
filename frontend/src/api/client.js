@@ -1,41 +1,96 @@
-// Thin wrapper around fetch() for the Spring Boot API.
-// Errors come back as RFC 9457 problem details: { title, status, detail, errors? }.
+// The one place that talks HTTP. Every API call goes through apiRequest(), so the bearer token,
+// JSON handling and error format are handled once instead of on every page.
 
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8081/api/v1'
+
+// Token storage choice: sessionStorage. It survives a page refresh but is cleared when the tab closes,
+// and it is not sent automatically with requests (so no CSRF). Trade-off: like localStorage, any
+// injected script (XSS) could read it - so we never render untrusted HTML. See README / milestone notes.
+const TOKEN_KEY = 'banking.accessToken'
+
+export const tokenStore = {
+  get() {
+    try {
+      return sessionStorage.getItem(TOKEN_KEY)
+    } catch {
+      return null
+    }
+  },
+  set(token) {
+    try {
+      sessionStorage.setItem(TOKEN_KEY, token)
+    } catch {
+      // Storage blocked (private mode etc.): the session simply won't survive a refresh.
+    }
+  },
+  clear() {
+    try {
+      sessionStorage.removeItem(TOKEN_KEY)
+    } catch {
+      // ignore
+    }
+  },
+}
+
+// AuthContext registers a callback here so an expired token logs the user out everywhere.
+let unauthorizedHandler = () => {}
+export function setUnauthorizedHandler(handler) {
+  unauthorizedHandler = handler
+}
+
+/** Mirrors the backend's ErrorResponse JSON: { status, code, message, fieldErrors }. */
 export class ApiError extends Error {
-  constructor(status, message, fieldErrors = {}) {
+  constructor(status, code, message, fieldErrors = []) {
     super(message)
+    this.name = 'ApiError'
     this.status = status
+    this.code = code
     this.fieldErrors = fieldErrors
   }
 }
 
-async function request(path, { method = 'GET', body } = {}) {
+export async function apiRequest(path, { method = 'GET', body, auth = true, signal } = {}) {
+  const headers = { Accept: 'application/json' }
+  if (body !== undefined) {
+    headers['Content-Type'] = 'application/json'
+  }
+  const token = tokenStore.get()
+  if (auth && token) {
+    headers.Authorization = `Bearer ${token}`
+  }
+
   let response
   try {
-    response = await fetch(`/api/v1${path}`, {
+    response = await fetch(BASE_URL + path, {
       method,
-      headers: body ? { 'Content-Type': 'application/json' } : undefined,
-      body: body ? JSON.stringify(body) : undefined,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal,
     })
-  } catch {
-    throw new ApiError(0, 'Cannot reach the server. Is the backend running on port 8081?')
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw error
+    }
+    throw new ApiError(0, 'NETWORK_ERROR', 'Cannot reach the server. Is the backend running on port 8081?')
   }
 
+  if (response.status === 204) {
+    return null
+  }
   const data = await response.json().catch(() => null)
+
   if (!response.ok) {
-    throw new ApiError(response.status, data?.detail || `Request failed (${response.status})`, data?.errors || {})
+    // 401 on a protected call means our token is missing/expired: log out. (A failed login is
+    // also a 401, but that call uses auth: false and must not trigger this.)
+    if (response.status === 401 && auth) {
+      unauthorizedHandler()
+    }
+    throw new ApiError(
+      response.status,
+      data?.code ?? `HTTP_${response.status}`,
+      data?.message ?? `Request failed (${response.status}).`,
+      data?.fieldErrors ?? [],
+    )
   }
   return data
-}
-
-export const api = {
-  health: () => request('/health'),
-  listAccounts: () => request('/accounts'),
-  getAccount: (number) => request(`/accounts/${number}`),
-  createAccount: (payload) => request('/accounts', { method: 'POST', body: payload }),
-  closeAccount: (number) => request(`/accounts/${number}/close`, { method: 'PATCH' }),
-  deposit: (number, payload) => request(`/accounts/${number}/deposit`, { method: 'POST', body: payload }),
-  withdraw: (number, payload) => request(`/accounts/${number}/withdraw`, { method: 'POST', body: payload }),
-  transactions: (number, page = 0, size = 10) => request(`/accounts/${number}/transactions?page=${page}&size=${size}`),
-  transfer: (payload) => request('/transfers', { method: 'POST', body: payload }),
 }
