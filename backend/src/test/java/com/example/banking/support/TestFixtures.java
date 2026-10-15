@@ -28,6 +28,19 @@ public class TestFixtures {
 		return persist(new BankAccount(owner, accountNumber, AccountType.SAVINGS, "INR"));
 	}
 
+	public BankAccount fundedAccount(User owner, String accountNumber, String balance) {
+		return fundedAccount(owner, accountNumber, balance, "INR");
+	}
+
+	public BankAccount fundedAccount(User owner, String accountNumber, String balance, String currency) {
+		BankAccount account = new BankAccount(owner, accountNumber, AccountType.SAVINGS, currency);
+		BigDecimal opening = new BigDecimal(balance);
+		if (opening.signum() > 0) {
+			account.credit(opening);
+		}
+		return persist(account);
+	}
+
 	public BankTransaction deposit(BankAccount destination, String amount, User createdBy) {
 		return persist(BankTransaction.deposit(reference(), destination, new BigDecimal(amount), "Test deposit",
 				createdBy));

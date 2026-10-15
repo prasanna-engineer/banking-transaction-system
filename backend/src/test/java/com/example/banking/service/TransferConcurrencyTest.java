@@ -1,0 +1,212 @@
+package com.example.banking.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
+
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.test.util.AopTestUtils;
+import org.springframework.transaction.support.TransactionTemplate;
+
+import com.example.banking.dto.transfer.TransferRequest;
+import com.example.banking.entity.BankAccount;
+import com.example.banking.entity.User;
+import com.example.banking.enums.Role;
+import com.example.banking.exception.ApiException;
+import com.example.banking.support.TestFixtures;
+
+import jakarta.persistence.EntityManager;
+
+/**
+ * Deliberately NOT @Transactional: these tests need real commits, real rollbacks and several threads,
+ * each with its own database connection - exactly like simultaneous HTTP requests in production.
+ * Rows are created with unique names and deleted again in cleanUp().
+ */
+@SpringBootTest
+@ActiveProfiles("test")
+class TransferConcurrencyTest {
+
+	@Autowired
+	private TransferService transferService;
+
+	@Autowired
+	private EntityManager entityManager;
+
+	@Autowired
+	private TransactionTemplate transactionTemplate;
+
+	@Autowired
+	private JdbcTemplate jdbcTemplate;
+
+	// A real AuditService that a test can tell to fail on demand.
+	@MockitoSpyBean
+	private AuditService auditService;
+
+	private final List<Long> createdUserIds = new ArrayList<>();
+
+	@Test
+	void concurrentTransfersCanNeverOverdrawAnAccount() throws Exception {
+		User owner = newUser();
+		BankAccount source = newAccount(owner, "100.00");
+		BankAccount destination = newAccount(owner, "0.00");
+
+		// 20 simultaneous transfers of 10.00 from an account holding 100.00: exactly 10 may succeed.
+		List<Outcome> outcomes = runConcurrently(20, i -> () -> transferService.transfer(owner.getId(),
+				new TransferRequest(source.getId(), destination.getId(), new BigDecimal("10.00"), "race " + i)));
+
+		assertThat(outcomes.stream().filter(Outcome::succeeded).count()).isEqualTo(10);
+		assertThat(outcomes.stream().filter(o -> "INSUFFICIENT_FUNDS".equals(o.errorCode())).count()).isEqualTo(10);
+		assertThat(balanceOf(source)).isEqualByComparingTo("0.00");
+		assertThat(balanceOf(destination)).isEqualByComparingTo("100.00");
+		assertThat(transactionCount(source)).isEqualTo(10);
+	}
+
+	@Test
+	void opposingTransfersDoNotDeadlockOrLoseMoney() throws Exception {
+		User owner = newUser();
+		BankAccount a = newAccount(owner, "100.00");
+		BankAccount b = newAccount(owner, "100.00");
+
+		// 40 A->B and 40 B->A at the same time. Without ordered locking, MariaDB would detect deadlocks
+		// (each transfer holding one row and waiting for the other) and abort some of them.
+		List<Outcome> outcomes = runConcurrently(80, i -> () -> {
+			boolean aToB = i % 2 == 0;
+			return transferService.transfer(owner.getId(), new TransferRequest(aToB ? a.getId() : b.getId(),
+					aToB ? b.getId() : a.getId(), new BigDecimal("1.00"), "swap " + i));
+		});
+
+		assertThat(outcomes).allMatch(Outcome::succeeded);
+		assertThat(balanceOf(a)).isEqualByComparingTo("100.00");
+		assertThat(balanceOf(b)).isEqualByComparingTo("100.00");
+		assertThat(transactionCount(a)).isEqualTo(80);
+	}
+
+	@Test
+	void failureAfterDebitAndCreditRollsEverythingBack() {
+		User owner = newUser();
+		BankAccount source = newAccount(owner, "500.00");
+		BankAccount destination = newAccount(owner, "0.00");
+		// Simulate a crash at the very last step - after the debit, the credit and the transaction insert.
+		// Stub the spy inside Spring's transactional proxy; calling the proxy itself here would demand a
+		// transaction (Propagation.MANDATORY) before Mockito even sees the call.
+		AuditService spy = AopTestUtils.getUltimateTargetObject(auditService);
+		doThrow(new IllegalStateException("Simulated failure while writing the audit log")).when(spy)
+			.record(any(), anyString(), anyString(), anyLong(), anyMap());
+
+		assertThatThrownBy(() -> transferService.transfer(owner.getId(),
+				new TransferRequest(source.getId(), destination.getId(), new BigDecimal("200.00"), "doomed")))
+			.hasMessageContaining("Simulated failure");
+
+		assertThat(balanceOf(source)).isEqualByComparingTo("500.00");
+		assertThat(balanceOf(destination)).isEqualByComparingTo("0.00");
+		assertThat(transactionCount(source)).isZero();
+	}
+
+	@AfterEach
+	void cleanUp() {
+		for (Long userId : createdUserIds) {
+			jdbcTemplate.update("DELETE FROM audit_logs WHERE actor_user_id = ?", userId);
+			jdbcTemplate.update("DELETE FROM transactions WHERE created_by = ?", userId);
+			jdbcTemplate.update("DELETE FROM bank_accounts WHERE user_id = ?", userId);
+			jdbcTemplate.update("DELETE FROM users WHERE id = ?", userId);
+		}
+	}
+
+	// ---- helpers -------------------------------------------------------------------------------
+
+	private User newUser() {
+		User user = transactionTemplate.execute(status -> new TestFixtures(entityManager)
+			.user("Race " + UUID.randomUUID().toString().substring(0, 8), Role.CUSTOMER));
+		createdUserIds.add(user.getId());
+		return user;
+	}
+
+	private BankAccount newAccount(User owner, String balance) {
+		String number = "6" + String.format("%011d", ThreadLocalRandom.current().nextLong(100_000_000_000L));
+		return transactionTemplate.execute(status -> new TestFixtures(entityManager)
+			.fundedAccount(entityManager.merge(owner), number, balance));
+	}
+
+	private BigDecimal balanceOf(BankAccount account) {
+		return jdbcTemplate.queryForObject("SELECT balance FROM bank_accounts WHERE id = ?", BigDecimal.class,
+				account.getId());
+	}
+
+	private int transactionCount(BankAccount account) {
+		return jdbcTemplate.queryForObject(
+				"SELECT COUNT(*) FROM transactions WHERE source_account_id = ? OR destination_account_id = ?",
+				Integer.class, account.getId(), account.getId());
+	}
+
+	/** Starts all tasks at the same instant (start gate) and collects what happened to each. */
+	private static List<Outcome> runConcurrently(int count, TaskFactory factory) throws Exception {
+		ExecutorService pool = Executors.newFixedThreadPool(count);
+		CountDownLatch startGate = new CountDownLatch(1);
+		try {
+			List<Future<Outcome>> futures = new ArrayList<>();
+			for (int i = 0; i < count; i++) {
+				Callable<?> task = factory.create(i);
+				futures.add(pool.submit(() -> {
+					startGate.await();
+					try {
+						task.call();
+						return new Outcome(null);
+					}
+					catch (ApiException ex) {
+						return new Outcome(ex.getCode());
+					}
+					catch (Exception ex) {
+						return new Outcome("UNEXPECTED: " + ex);
+					}
+				}));
+			}
+			startGate.countDown();
+			List<Outcome> outcomes = new ArrayList<>();
+			for (Future<Outcome> future : futures) {
+				outcomes.add(future.get(60, TimeUnit.SECONDS));
+			}
+			return outcomes;
+		}
+		finally {
+			pool.shutdownNow();
+		}
+	}
+
+	@FunctionalInterface
+	private interface TaskFactory {
+
+		Callable<?> create(int index);
+
+	}
+
+	private record Outcome(String errorCode) {
+
+		boolean succeeded() {
+			return errorCode == null;
+		}
+
+	}
+
+}

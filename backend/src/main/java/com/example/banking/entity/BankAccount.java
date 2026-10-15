@@ -76,6 +76,25 @@ public class BankAccount {
 		this.status = AccountStatus.ACTIVE;
 	}
 
+	public boolean isActive() {
+		return status == AccountStatus.ACTIVE;
+	}
+
+	/** The service checks funds first; this guard makes a negative balance impossible even if it forgets. */
+	public void debit(BigDecimal amount) {
+		if (amount.signum() <= 0 || balance.compareTo(amount) < 0) {
+			throw new IllegalStateException("Debit would make balance negative or amount is not positive");
+		}
+		balance = balance.subtract(amount);
+	}
+
+	public void credit(BigDecimal amount) {
+		if (amount.signum() <= 0) {
+			throw new IllegalStateException("Credit amount must be positive");
+		}
+		balance = balance.add(amount);
+	}
+
 	@PrePersist
 	void onCreate() {
 		createdAt = Instant.now();
