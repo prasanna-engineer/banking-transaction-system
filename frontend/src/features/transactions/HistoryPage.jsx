@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { listAccounts } from '../../api/accounts'
 import { searchTransactions } from '../../api/transactions'
 import { useApi } from '../../api/useApi'
+import { useLive } from '../notifications/LiveContext'
 import Alert from '../../components/Alert'
 import Pager from '../../components/Pager'
 import Spinner from '../../components/Spinner'
@@ -19,6 +20,7 @@ function filtersFromUrl(searchParams) {
 
 export default function HistoryPage() {
   const [searchParams, setSearchParams] = useSearchParams()
+  const { moneyVersion } = useLive()
   const applied = filtersFromUrl(searchParams)
   const page = Number(searchParams.get('page') ?? 0)
 
@@ -28,7 +30,7 @@ export default function HistoryPage() {
   const accounts = useApi((signal) => listAccounts(signal), [])
   const history = useApi(
     (signal) => searchTransactions({ ...applied, page }, signal),
-    [searchParams.toString()],
+    [searchParams.toString(), moneyVersion],
   )
 
   function update(field) {

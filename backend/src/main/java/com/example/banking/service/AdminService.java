@@ -5,6 +5,7 @@ import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
@@ -18,6 +19,7 @@ import com.example.banking.entity.AuditLog;
 import com.example.banking.entity.User;
 import com.example.banking.enums.UserStatus;
 import com.example.banking.exception.ApiException;
+import com.example.banking.realtime.LiveEvents;
 import com.example.banking.repository.AuditLogRepository;
 import com.example.banking.repository.UserRepository;
 
@@ -34,12 +36,15 @@ public class AdminService {
 
 	private final AuditService auditService;
 
+	private final ApplicationEventPublisher events;
+
 	public AdminService(UserRepository userRepository, AuditLogRepository auditLogRepository,
-			CurrentUserService currentUserService, AuditService auditService) {
+			CurrentUserService currentUserService, AuditService auditService, ApplicationEventPublisher events) {
 		this.userRepository = userRepository;
 		this.auditLogRepository = auditLogRepository;
 		this.currentUserService = currentUserService;
 		this.auditService = auditService;
+		this.events = events;
 	}
 
 	@Transactional(readOnly = true)
@@ -70,6 +75,10 @@ public class AdminService {
 			metadata.put("to", newStatus.name());
 			auditService.record(admin, "USER_STATUS_CHANGED", "USER", target.getId(), metadata);
 			log.info("Admin {} changed user {} status {} -> {}", admin.getId(), target.getId(), previous, newStatus);
+			if (newStatus == UserStatus.DISABLED) {
+				// Their open browser tabs are signed out the moment this commits.
+				events.publishEvent(new LiveEvents.SessionEnded(target.getId()));
+			}
 		}
 		return UserResponse.from(target);
 	}

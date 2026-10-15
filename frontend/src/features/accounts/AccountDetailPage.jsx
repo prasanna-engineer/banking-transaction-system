@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { getAccount } from '../../api/accounts'
 import { searchTransactions } from '../../api/transactions'
 import { useApi } from '../../api/useApi'
+import { useLive } from '../notifications/LiveContext'
 import Alert from '../../components/Alert'
 import Pager from '../../components/Pager'
 import Spinner from '../../components/Spinner'
@@ -14,7 +15,8 @@ const PAGE_SIZE = 10
 
 export default function AccountDetailPage() {
   const { id } = useParams()
-  const account = useApi((signal) => getAccount(id, signal), [id])
+  const { moneyVersion } = useLive()
+  const account = useApi((signal) => getAccount(id, signal), [id, moneyVersion])
 
   if (account.status === 'loading') {
     return <Spinner label="Loading account…" />
@@ -57,10 +59,11 @@ export default function AccountDetailPage() {
 }
 
 function AccountTransactions({ accountId }) {
+  const { moneyVersion } = useLive()
   const [page, setPage] = useState(0)
   const history = useApi(
     (signal) => searchTransactions({ accountId, page, size: PAGE_SIZE, sort: 'createdAt,desc' }, signal),
-    [accountId, page],
+    [accountId, page, moneyVersion],
   )
 
   return (

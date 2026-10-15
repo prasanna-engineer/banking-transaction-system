@@ -7,6 +7,9 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.verify;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -35,6 +38,8 @@ import com.example.banking.entity.BankAccount;
 import com.example.banking.entity.User;
 import com.example.banking.enums.Role;
 import com.example.banking.exception.ApiException;
+import com.example.banking.realtime.LiveEvents;
+import com.example.banking.realtime.SseHub;
 import com.example.banking.support.TestFixtures;
 
 import jakarta.persistence.EntityManager;
@@ -63,6 +68,10 @@ class TransferConcurrencyTest {
 	// A real AuditService that a test can tell to fail on demand.
 	@MockitoSpyBean
 	private AuditService auditService;
+
+	// The real hub, watched so tests can check what was pushed to browsers and when.
+	@MockitoSpyBean
+	private SseHub sseHub;
 
 	private final List<Long> createdUserIds = new ArrayList<>();
 
@@ -122,6 +131,10 @@ class TransferConcurrencyTest {
 		assertThat(balanceOf(source)).isEqualByComparingTo("500.00");
 		assertThat(balanceOf(destination)).isEqualByComparingTo("0.00");
 		assertThat(transactionCount(source)).isZero();
+		// Nothing happened, so nobody may be told that it did.
+		assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM notifications WHERE user_id = ?", Integer.class,
+				owner.getId())).isZero();
+		verify(sseHub, never()).onUserEvent(any());
 	}
 
 	@Test
@@ -170,10 +183,28 @@ class TransferConcurrencyTest {
 			.isZero();
 	}
 
+	@Test
+	void aCommittedTransferIsPushedLiveToTheReceiver() {
+		User sender = newUser();
+		User receiver = newUser();
+		BankAccount source = newAccount(sender, "50.00");
+		BankAccount destination = newAccount(receiver, "0.00");
+
+		transferService.transfer(sender.getId(),
+				new TransferRequest(source.getId(), destination.getId(), new BigDecimal("5.00"), "live"));
+
+		// Delivered after commit, to the receiver, as a "notification" event.
+		verify(sseHub, timeout(2000)).onUserEvent(org.mockito.ArgumentMatchers.argThat((LiveEvents.ForUsers event) ->
+				event.userIds().contains(receiver.getId()) && event.name().equals("notification")));
+		assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM notifications WHERE user_id = ?", Integer.class,
+				receiver.getId())).isEqualTo(1);
+	}
+
 	@AfterEach
 	void cleanUp() {
 		for (Long userId : createdUserIds) {
 			jdbcTemplate.update("DELETE FROM idempotency_keys WHERE user_id = ?", userId);
+			jdbcTemplate.update("DELETE FROM notifications WHERE user_id = ?", userId);
 			jdbcTemplate.update("DELETE FROM audit_logs WHERE actor_user_id = ?", userId);
 			jdbcTemplate.update("DELETE FROM transactions WHERE created_by = ?", userId);
 			jdbcTemplate.update("DELETE FROM bank_accounts WHERE user_id = ?", userId);

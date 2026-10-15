@@ -1,13 +1,15 @@
 import { Link } from 'react-router-dom'
 import { listAccounts } from '../../api/accounts'
 import { useApi } from '../../api/useApi'
+import { useLive } from '../notifications/LiveContext'
 import Alert from '../../components/Alert'
 import Spinner from '../../components/Spinner'
 import { formatDateTime, maskAccountNumber, titleCase } from '../../utils/format'
 import { formatMoney } from '../../utils/money'
 
 export default function AccountsPage() {
-  const { status, data: accounts, error, reload } = useApi((signal) => listAccounts(signal), [])
+  const { moneyVersion } = useLive()
+  const { status, data: accounts, error, reload } = useApi((signal) => listAccounts(signal), [moneyVersion])
 
   return (
     <>

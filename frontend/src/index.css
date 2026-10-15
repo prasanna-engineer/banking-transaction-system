@@ -864,3 +864,166 @@ fieldset.field legend {
     padding: 0.45rem 0.8rem;
   }
 }
+
+/* ---- Notifications bell (in the brand header) ---- */
+.bell {
+  position: relative;
+}
+.bell__button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  cursor: pointer;
+}
+.bell__button:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+.bell__count {
+  position: absolute;
+  top: -5px;
+  right: -6px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--brand-red);
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 20px;
+  text-align: center;
+}
+.bell__live {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #c8ccd2;
+  border: 2px solid var(--brand-orange-deep);
+}
+.bell__live--on {
+  background: #4ade80;
+}
+.bell__panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  z-index: 20;
+  width: min(360px, calc(100vw - 2rem));
+  background: var(--surface);
+  color: var(--text);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 32px rgba(16, 24, 40, 0.22);
+  overflow: hidden;
+}
+.bell__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--navy);
+}
+.bell__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 380px;
+  overflow-y: auto;
+}
+.bell__item {
+  display: grid;
+  gap: 0.15rem;
+  width: 100%;
+  padding: 0.7rem 1rem;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.bell__item:hover {
+  background: #fff8f3;
+}
+.bell__item--unread {
+  background: #fff1e8;
+  box-shadow: inset 3px 0 0 var(--brand-orange-deep);
+}
+.bell__title {
+  font-weight: 700;
+  color: var(--navy);
+}
+.bell__message {
+  font-size: 0.9rem;
+}
+.bell__time {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.bell__empty {
+  margin: 0;
+  padding: 1rem;
+  color: var(--muted);
+}
+
+/* ---- Toasts ---- */
+.toasts {
+  position: fixed;
+  top: 84px;
+  right: 1rem;
+  z-index: 50;
+  display: grid;
+  gap: 0.6rem;
+  width: min(360px, calc(100vw - 2rem));
+}
+.toast {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 10px 28px rgba(16, 24, 40, 0.2);
+  border-left: 5px solid var(--navy);
+  animation: toast-in 0.25s ease-out;
+}
+.toast p {
+  margin: 0.2rem 0 0;
+  font-size: 0.9rem;
+}
+.toast--success {
+  border-left-color: var(--credit);
+}
+.toast--error {
+  border-left-color: var(--debit);
+}
+.toast__close {
+  border: none;
+  background: transparent;
+  font-size: 1.3rem;
+  line-height: 1;
+  color: var(--muted);
+  cursor: pointer;
+}
+@keyframes toast-in {
+  from {
+    transform: translateY(-8px);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: none;
+  }
+}

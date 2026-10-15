@@ -1,7 +1,7 @@
 // The one place that talks HTTP. Every API call goes through apiRequest(), so the bearer token,
 // JSON handling and error format are handled once instead of on every page.
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8081/api/v1'
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8081/api/v1'
 
 // Token storage choice: sessionStorage. It survives a page refresh but is cleared when the tab closes,
 // and it is not sent automatically with requests (so no CSRF). Trade-off: like localStorage, any
@@ -61,7 +61,7 @@ export async function apiRequest(path, { method = 'GET', body, auth = true, sign
 
   let response
   try {
-    response = await fetch(BASE_URL + path, {
+    response = await fetch(API_BASE_URL + path, {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),

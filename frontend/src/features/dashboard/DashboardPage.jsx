@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { listAccounts } from '../../api/accounts'
 import { searchTransactions } from '../../api/transactions'
 import { useApi } from '../../api/useApi'
+import { useLive } from '../notifications/LiveContext'
 import Alert from '../../components/Alert'
 import Spinner from '../../components/Spinner'
 import TransactionTable from '../../components/TransactionTable'
@@ -38,11 +39,12 @@ function AdminHome({ name }) {
 }
 
 function CustomerDashboard({ user }) {
+  const { moneyVersion } = useLive()
   // Both requests start together; the page waits for both.
   const { status, data, error, reload } = useApi(
     (signal) =>
       Promise.all([listAccounts(signal), searchTransactions({ size: 5, sort: 'createdAt,desc' }, signal)]),
-    [],
+    [moneyVersion], // reload when money moves (live event)
   )
 
   return (

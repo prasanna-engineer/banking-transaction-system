@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { listAuditLogs } from '../../api/admin'
 import { useApi } from '../../api/useApi'
+import { useLive } from '../notifications/LiveContext'
 import Alert from '../../components/Alert'
 import Pager from '../../components/Pager'
 import Spinner from '../../components/Spinner'
@@ -21,10 +22,11 @@ function describe(metadataJson) {
 }
 
 export default function AdminAuditLogsPage() {
+  const { auditVersion } = useLive()
   const [filter, setFilter] = useState({ action: '', page: 0 })
   const logs = useApi(
     (signal) => listAuditLogs({ action: filter.action, page: filter.page, size: 20 }, signal),
-    [filter.action, filter.page],
+    [filter.action, filter.page, auditVersion], // live: reload when a new audit event arrives
   )
 
   return (

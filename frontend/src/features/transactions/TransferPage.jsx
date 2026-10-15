@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { listAccounts } from '../../api/accounts'
 import { createTransfer, newIdempotencyKey } from '../../api/transfers'
 import { useApi } from '../../api/useApi'
+import { useLive } from '../notifications/LiveContext'
 import Alert from '../../components/Alert'
 import Spinner from '../../components/Spinner'
 import { maskAccountNumber, titleCase } from '../../utils/format'
@@ -26,7 +27,8 @@ const EMPTY_FORM = {
  * The review step exists so a typo in the amount or account is caught before money moves.
  */
 export default function TransferPage() {
-  const accounts = useApi((signal) => listAccounts(signal), [])
+  const { moneyVersion } = useLive()
+  const accounts = useApi((signal) => listAccounts(signal), [moneyVersion])
   const [step, setStep] = useState('form')
   const [form, setForm] = useState(EMPTY_FORM)
   const [fieldErrors, setFieldErrors] = useState({})

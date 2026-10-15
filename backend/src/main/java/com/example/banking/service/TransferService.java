@@ -70,6 +70,8 @@ public class TransferService {
 
 	private final AuditService auditService;
 
+	private final NotificationService notificationService;
+
 	private final TransferProperties properties;
 
 	private final TransactionTemplate transactionTemplate;
@@ -78,12 +80,14 @@ public class TransferService {
 
 	public TransferService(BankAccountRepository accountRepository, BankTransactionRepository transactionRepository,
 			IdempotencyRecordRepository idempotencyRepository, CurrentUserService currentUserService,
-			AuditService auditService, TransferProperties properties, PlatformTransactionManager transactionManager) {
+			AuditService auditService, NotificationService notificationService, TransferProperties properties,
+			PlatformTransactionManager transactionManager) {
 		this.accountRepository = accountRepository;
 		this.transactionRepository = transactionRepository;
 		this.idempotencyRepository = idempotencyRepository;
 		this.currentUserService = currentUserService;
 		this.auditService = auditService;
+		this.notificationService = notificationService;
 		this.properties = properties;
 		this.transactionTemplate = new TransactionTemplate(transactionManager);
 		this.readOnlyTransactionTemplate = new TransactionTemplate(transactionManager);
@@ -214,6 +218,7 @@ public class TransferService {
 		metadata.put("amount", amount.toPlainString());
 		metadata.put("currency", tx.getCurrency());
 		auditService.record(user, "TRANSFER_COMPLETED", "TRANSACTION", tx.getId(), metadata);
+		notificationService.recordTransfer(tx);
 		log.info("Transfer {} completed: {} {} from account {} to account {} by user {}", tx.getReference(),
 				amount.toPlainString(), tx.getCurrency(), sourceId, destinationId, user.getId());
 

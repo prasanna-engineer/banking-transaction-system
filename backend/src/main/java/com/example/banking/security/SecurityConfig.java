@@ -52,6 +52,9 @@ public class SecurityConfig {
 				.requestMatchers(HttpMethod.GET, "/api/v1/health").permitAll()
 				.requestMatchers(HttpMethod.POST, "/api/v1/auth/register", "/api/v1/auth/login").permitAll()
 				.requestMatchers("/error").permitAll()
+				// The live stream is authenticated by a single-use ticket checked in NotificationController,
+				// because the browser's EventSource cannot send an Authorization header.
+				.requestMatchers(HttpMethod.GET, "/api/v1/notifications/stream").permitAll()
 				// API documentation. The docs describe endpoints only; every endpoint still enforces its own rules.
 				// Turn off in a real deployment with API_DOCS_ENABLED=false.
 				.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
