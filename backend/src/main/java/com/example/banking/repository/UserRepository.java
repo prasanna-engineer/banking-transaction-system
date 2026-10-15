@@ -16,6 +16,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
 	boolean existsByEmail(String email);
 
+	@Query("select u.tokenVersion from User u where u.id = :id")
+	Optional<Integer> findTokenVersion(@Param("id") Long id);
+
 	// Bound parameter, never string concatenation: the search text cannot inject SQL.
 	@Query("""
 			select u from User u

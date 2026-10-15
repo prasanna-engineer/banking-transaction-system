@@ -32,7 +32,9 @@ app:
     # HMAC-SHA256 signing key, at least 32 bytes. No default: never ship a guessable secret.
     secret: ${JWT_SECRET}
     issuer: banking-demo
-    access-token-ttl: 30m
+    # Short-lived access tokens; the browser renews them with a refresh token (single use, 7 days).
+    access-token-ttl: 15m
+    refresh-token-ttl: 7d
   transfer:
     # Largest single demo transfer. Larger amounts are rejected with AMOUNT_LIMIT_EXCEEDED.
     max-amount: 1000000.00

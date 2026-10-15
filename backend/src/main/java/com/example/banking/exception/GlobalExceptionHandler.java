@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.dao.PessimisticLockingFailureException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -35,7 +36,13 @@ public class GlobalExceptionHandler {
 
 	@ExceptionHandler(ApiException.class)
 	public ResponseEntity<ErrorResponse> handleApi(ApiException ex, HttpServletRequest request) {
-		return build(ex.getStatus(), ex.getCode(), ex.getMessage(), request);
+		ResponseEntity<ErrorResponse> response = build(ex.getStatus(), ex.getCode(), ex.getMessage(), request);
+		if (ex.getRetryAfterSeconds() == null) {
+			return response;
+		}
+		return ResponseEntity.status(response.getStatusCode())
+			.header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.getRetryAfterSeconds()))
+			.body(response.getBody());
 	}
 
 	// @Valid failed on a request body. Rejected values are deliberately not echoed back (they may be passwords).

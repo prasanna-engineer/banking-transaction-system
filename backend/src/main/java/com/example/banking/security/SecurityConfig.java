@@ -6,6 +6,7 @@ import java.util.List;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -16,7 +17,10 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
@@ -50,7 +54,9 @@ public class SecurityConfig {
 			.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 			.authorizeHttpRequests(auth -> auth
 				.requestMatchers(HttpMethod.GET, "/api/v1/health").permitAll()
-				.requestMatchers(HttpMethod.POST, "/api/v1/auth/register", "/api/v1/auth/login").permitAll()
+				.requestMatchers(HttpMethod.POST, "/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/refresh",
+						"/api/v1/auth/logout")
+				.permitAll()
 				.requestMatchers("/error").permitAll()
 				// The live stream is authenticated by a single-use ticket checked in NotificationController,
 				// because the browser's EventSource cannot send an Authorization header.
@@ -97,11 +103,17 @@ public class SecurityConfig {
 		return NimbusJwtEncoder.withSecretKey(jwtSigningKey).algorithm(MacAlgorithm.HS256).build();
 	}
 
-	/** Rejects tokens with a bad signature, a different algorithm, an expired "exp" or a wrong issuer. */
+	/**
+	 * Rejects tokens with a bad signature, a different algorithm, an expired "exp" or a wrong issuer - and,
+	 * when the full application is running, tokens issued before the user's last "sign out everywhere".
+	 */
 	@Bean
-	JwtDecoder jwtDecoder(SecretKey jwtSigningKey, JwtProperties properties) {
+	JwtDecoder jwtDecoder(SecretKey jwtSigningKey, JwtProperties properties,
+			ObjectProvider<TokenVersionValidator> tokenVersionValidator) {
 		NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(jwtSigningKey).macAlgorithm(MacAlgorithm.HS256).build();
-		decoder.setJwtValidator(JwtValidators.createDefaultWithIssuer(properties.issuer()));
+		OAuth2TokenValidator<Jwt> standard = JwtValidators.createDefaultWithIssuer(properties.issuer());
+		TokenVersionValidator versionCheck = tokenVersionValidator.getIfAvailable();
+		decoder.setJwtValidator(versionCheck == null ? standard : new DelegatingOAuth2TokenValidator<>(standard, versionCheck));
 		return decoder;
 	}
 
@@ -114,8 +126,10 @@ public class SecurityConfig {
 	CorsConfigurationSource corsConfigurationSource(@Value("${app.cors.allowed-origins}") List<String> allowedOrigins) {
 		CorsConfiguration config = new CorsConfiguration();
 		config.setAllowedOrigins(allowedOrigins);
-		config.setAllowedMethods(List.of("GET", "POST", "PATCH", "OPTIONS"));
+		config.setAllowedMethods(List.of("GET", "POST", "PATCH", "DELETE", "OPTIONS"));
 		config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Idempotency-Key"));
+		// Response headers the browser's JavaScript may read (all others are hidden cross-origin).
+		config.setExposedHeaders(List.of("Content-Disposition", "Retry-After", "Idempotent-Replayed"));
 		UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
 		source.registerCorsConfiguration("/api/**", config);
 		return source;

@@ -12,10 +12,22 @@ public class ApiException extends RuntimeException {
 
 	private final String code;
 
+	// Seconds until the client may retry (sent as the Retry-After header), e.g. for 429 responses.
+	private Long retryAfterSeconds;
+
 	public ApiException(HttpStatus status, String code, String message) {
 		super(message);
 		this.status = status;
 		this.code = code;
+	}
+
+	public ApiException withRetryAfter(long seconds) {
+		this.retryAfterSeconds = seconds;
+		return this;
+	}
+
+	public Long getRetryAfterSeconds() {
+		return retryAfterSeconds;
 	}
 
 	public static ApiException notFound(String code, String message) {

@@ -42,6 +42,10 @@ public class User {
 	@Column(nullable = false, length = 20)
 	private UserStatus status;
 
+	// Copied into every access token ("tv" claim). Incrementing it invalidates all tokens issued before.
+	@Column(name = "token_version", nullable = false)
+	private int tokenVersion;
+
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private Instant createdAt;
 
@@ -74,6 +78,14 @@ public class User {
 
 	public void changeStatus(UserStatus newStatus) {
 		this.status = newStatus;
+	}
+
+	public void invalidateAllTokens() {
+		tokenVersion++;
+	}
+
+	public int getTokenVersion() {
+		return tokenVersion;
 	}
 
 	@PrePersist
