@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { listAccounts } from '../../api/accounts'
 import { ApiError } from '../../api/client'
 import { listPayees } from '../../api/payees'
-import { createTransfer } from '../../api/transfers'
+import { createTransfer, requestTransferOtp } from '../../api/transfers'
 import TransferPage from './TransferPage'
 
 // Replace the real HTTP calls with fakes so the page can be tested without a backend.
@@ -12,6 +12,7 @@ vi.mock('../../api/accounts', () => ({ listAccounts: vi.fn() }))
 vi.mock('../../api/payees', () => ({ listPayees: vi.fn(() => Promise.resolve([])) }))
 vi.mock('../../api/transfers', () => ({
   createTransfer: vi.fn(),
+  requestTransferOtp: vi.fn(),
   newIdempotencyKey: vi.fn(() => `key-${Math.random()}`),
 }))
 
@@ -67,6 +68,28 @@ describe('TransferPage', () => {
     expect(await screen.findByText('TRX-20261015-ABCDEFGHJK')).toBeInTheDocument()
     const [body] = createTransfer.mock.calls[0]
     expect(body).toEqual({ sourceAccountId: 1, destinationAccountId: 2, amount: '25.50' })
+  })
+
+  it('asks for a one-time code when the server requires one, then sends it', async () => {
+    createTransfer
+      .mockRejectedValueOnce(new ApiError(428, 'OTP_REQUIRED', 'Transfers above 50000.00 need a one-time code.'))
+      .mockResolvedValueOnce({ reference: 'TRX-BIG', status: 'COMPLETED', sourceAccountId: 1, amount: '60000.00', currency: 'INR' })
+    requestTransferOtp.mockResolvedValue({ challengeId: 'ch-1', demoCode: '482913', expiresInSeconds: 300 })
+    renderPage()
+    await fillAndReview({ amount: '60000.00' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm transfer' }))
+    expect(await screen.findByText('482913')).toBeInTheDocument()
+    const confirm = screen.getByRole('button', { name: 'Confirm with code' })
+    expect(confirm).toBeDisabled() // until 6 digits are entered
+
+    fireEvent.change(screen.getByLabelText('One-time code'), { target: { value: '482913' } })
+    fireEvent.click(confirm)
+
+    await screen.findByText('TRX-BIG')
+    expect(createTransfer.mock.calls[1][2]).toEqual({ challengeId: 'ch-1', code: '482913' })
+    // Same transfer, same idempotency key on the retry with the code.
+    expect(createTransfer.mock.calls[1][1]).toBe(createTransfer.mock.calls[0][1])
   })
 
   it('pays a saved payee by account number', async () => {

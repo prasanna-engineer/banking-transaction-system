@@ -66,7 +66,7 @@ public class SecurityConfig {
 				.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
 				.requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
 				// Admins inspect activity; only customers move money (project guide, section 6).
-				.requestMatchers(HttpMethod.POST, "/api/v1/transfers").hasRole("CUSTOMER")
+				.requestMatchers(HttpMethod.POST, "/api/v1/transfers", "/api/v1/transfers/otp").hasRole("CUSTOMER")
 				.requestMatchers("/api/v1/payees/**").hasRole("CUSTOMER")
 				.anyRequest().authenticated())
 			// Validates "Authorization: Bearer <jwt>" on every request using the JwtDecoder bean below.
@@ -127,7 +127,7 @@ public class SecurityConfig {
 		CorsConfiguration config = new CorsConfiguration();
 		config.setAllowedOrigins(allowedOrigins);
 		config.setAllowedMethods(List.of("GET", "POST", "PATCH", "DELETE", "OPTIONS"));
-		config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Idempotency-Key"));
+		config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Idempotency-Key", "X-OTP-Challenge", "X-OTP-Code"));
 		// Response headers the browser's JavaScript may read (all others are hidden cross-origin).
 		config.setExposedHeaders(List.of("Content-Disposition", "Retry-After", "Idempotent-Replayed"));
 		UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

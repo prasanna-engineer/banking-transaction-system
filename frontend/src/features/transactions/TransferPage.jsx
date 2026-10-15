@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { listAccounts } from '../../api/accounts'
 import { listPayees } from '../../api/payees'
-import { createTransfer, newIdempotencyKey } from '../../api/transfers'
+import { createTransfer, newIdempotencyKey, requestTransferOtp } from '../../api/transfers'
 import { useApi } from '../../api/useApi'
 import { useLive } from '../notifications/LiveContext'
 import Alert from '../../components/Alert'
@@ -46,6 +46,8 @@ export default function TransferPage() {
   // One key per reviewed transfer: pressing Confirm again after an error re-sends the same key,
   // so the server can never process this transfer twice.
   const [idempotencyKey, setIdempotencyKey] = useState(null)
+  // Step-up for large transfers: { challengeId, demoCode, expiresInSeconds, code } once the server asks for it.
+  const [otp, setOtp] = useState(null)
 
   // Only block the page on the first load; a refresh after a transfer keeps showing the old data.
   if (!accounts.data && accounts.status === 'loading') return <Spinner label="Loading your accounts…" />
@@ -95,27 +97,46 @@ export default function TransferPage() {
     setSubmitError(null)
     if (validate()) {
       setIdempotencyKey(newIdempotencyKey())
+      setOtp(null)
       setStep('review')
     }
+  }
+
+  function buildBody() {
+    return {
+      sourceAccountId: Number(form.sourceAccountId),
+      amount: form.amount.trim(), // sent as a string: never converted to a float
+      description: form.description.trim() || undefined,
+      ...(form.destinationType === 'own'
+        ? { destinationAccountId: Number(form.destinationAccountId) }
+        : { destinationAccountNumber: form.destinationType === 'payee' ? payee.accountNumber : form.destinationAccountNumber.trim() }),
+    }
+  }
+
+  // Large transfers: the server answers OTP_REQUIRED; we fetch a code for exactly this transfer.
+  async function sendNewCode() {
+    const issued = await requestTransferOtp(buildBody())
+    setOtp({ ...issued, code: '' })
   }
 
   async function handleConfirm() {
     setSubmitting(true)
     setSubmitError(null)
     try {
-      const body = {
-        sourceAccountId: Number(form.sourceAccountId),
-        amount: form.amount.trim(), // sent as a string: never converted to a float
-        description: form.description.trim() || undefined,
-        ...(form.destinationType === 'own'
-          ? { destinationAccountId: Number(form.destinationAccountId) }
-          : { destinationAccountNumber: form.destinationType === 'payee' ? payee.accountNumber : form.destinationAccountNumber.trim() }),
-      }
-      setResult(await createTransfer(body, idempotencyKey))
+      const otpHeaders = otp ? { challengeId: otp.challengeId, code: otp.code.trim() } : undefined
+      setResult(await createTransfer(buildBody(), idempotencyKey, otpHeaders))
       setStep('done')
       accounts.reload() // balances come from the server, never calculated here
     } catch (err) {
-      setSubmitError(err.message)
+      if (err.code === 'OTP_REQUIRED') {
+        try {
+          await sendNewCode()
+        } catch (otpError) {
+          setSubmitError(otpError.message)
+        }
+      } else {
+        setSubmitError(err.message)
+      }
     } finally {
       setSubmitting(false)
     }
@@ -124,6 +145,7 @@ export default function TransferPage() {
   function startOver() {
     setForm(EMPTY_FORM)
     setResult(null)
+    setOtp(null)
     setStep('form')
   }
 
@@ -274,12 +296,42 @@ export default function TransferPage() {
             <dt>Description</dt>
             <dd>{form.description.trim() || '—'}</dd>
           </dl>
+          {otp && (
+            <div className="otp">
+              <p>
+                <strong>Extra security check.</strong> Large transfers need a one-time code, valid for{' '}
+                {Math.round(otp.expiresInSeconds / 60)} minutes.
+              </p>
+              <p className="otp__demo" role="note">
+                Demo: a real bank would text this code to your phone. Your code is <code>{otp.demoCode}</code>
+              </p>
+              <div className="field">
+                <label htmlFor="otpCode">One-time code</label>
+                <input
+                  id="otpCode"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  value={otp.code}
+                  onChange={(e) => setOtp((o) => ({ ...o, code: e.target.value.replace(/\D/g, '') }))}
+                />
+              </div>
+              <button type="button" className="button button--small button--ghost" onClick={() => sendNewCode().catch((e) => setSubmitError(e.message))}>
+                Send a new code
+              </button>
+            </div>
+          )}
           <div className="button-row">
             <button type="button" className="button" onClick={() => setStep('form')} disabled={submitting}>
               Edit
             </button>
-            <button type="button" className="button button--primary" onClick={handleConfirm} disabled={submitting}>
-              {submitting ? 'Sending…' : 'Confirm transfer'}
+            <button
+              type="button"
+              className="button button--primary"
+              onClick={handleConfirm}
+              disabled={submitting || (otp !== null && otp.code.length !== 6)}
+            >
+              {submitting ? 'Sending…' : otp ? 'Confirm with code' : 'Confirm transfer'}
             </button>
           </div>
         </div>

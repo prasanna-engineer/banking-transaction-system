@@ -74,6 +74,8 @@ public class TransferService {
 
 	private final TransferProperties properties;
 
+	private final OtpService otpService;
+
 	private final TransactionTemplate transactionTemplate;
 
 	private final TransactionTemplate readOnlyTransactionTemplate;
@@ -81,7 +83,7 @@ public class TransferService {
 	public TransferService(BankAccountRepository accountRepository, BankTransactionRepository transactionRepository,
 			IdempotencyRecordRepository idempotencyRepository, CurrentUserService currentUserService,
 			AuditService auditService, NotificationService notificationService, TransferProperties properties,
-			PlatformTransactionManager transactionManager) {
+			OtpService otpService, PlatformTransactionManager transactionManager) {
 		this.accountRepository = accountRepository;
 		this.transactionRepository = transactionRepository;
 		this.idempotencyRepository = idempotencyRepository;
@@ -89,6 +91,7 @@ public class TransferService {
 		this.auditService = auditService;
 		this.notificationService = notificationService;
 		this.properties = properties;
+		this.otpService = otpService;
 		this.transactionTemplate = new TransactionTemplate(transactionManager);
 		this.readOnlyTransactionTemplate = new TransactionTemplate(transactionManager);
 		this.readOnlyTransactionTemplate.setReadOnly(true);
@@ -97,6 +100,51 @@ public class TransferService {
 	/** A transfer without an idempotency key (used by tests and internal callers). */
 	public TransferResponse transfer(Long currentUserId, TransferRequest request) {
 		return transfer(currentUserId, request, null).response();
+	}
+
+	/**
+	 * Entry point for customers (the HTTP API): like {@link #transfer(Long, TransferRequest, String)}, but a
+	 * transfer above the OTP threshold also needs a one-time code (step-up authentication).
+	 *
+	 * Order matters: a repeated request with an already-used Idempotency-Key is replayed FIRST - the
+	 * original transfer was already confirmed, so a network retry must not demand a second code.
+	 */
+	public TransferResult transferWithStepUp(Long currentUserId, TransferRequest request, String idempotencyKey,
+			String otpChallengeId, String otpCode) {
+		if (idempotencyKey != null && IDEMPOTENCY_KEY_PATTERN.matcher(idempotencyKey).matches()) {
+			Optional<TransferResult> previous = findPrevious(currentUserId, idempotencyKey, requestHash(request));
+			if (previous.isPresent()) {
+				return previous.get();
+			}
+		}
+		// Reject impossible amounts before asking for a code for a transfer that could never succeed.
+		checkLimit(request.amount());
+		if (requiresOtp(request)) {
+			if (otpChallengeId == null || otpCode == null) {
+				throw new ApiException(HttpStatus.PRECONDITION_REQUIRED, "OTP_REQUIRED",
+						"Transfers above " + properties.otpThreshold().toPlainString()
+								+ " need a one-time code. Request one and send it with the transfer.");
+			}
+			otpService.verify(currentUserId, requestHash(request), otpChallengeId, otpCode);
+		}
+		return transfer(currentUserId, request, idempotencyKey);
+	}
+
+	/** Issues a one-time code for exactly this transfer request (demo: the code is returned, not sent by SMS). */
+	public OtpService.IssuedOtp requestOtp(Long currentUserId, TransferRequest request) {
+		Long userId = currentUserService.requireActiveUser(currentUserId).getId();
+		return otpService.issue(userId, requestHash(request));
+	}
+
+	private void checkLimit(BigDecimal amount) {
+		if (amount.compareTo(properties.maxAmount()) > 0) {
+			throw ApiException.badRequest("AMOUNT_LIMIT_EXCEEDED",
+					"The amount exceeds the demo limit of " + properties.maxAmount().toPlainString() + ".");
+		}
+	}
+
+	private boolean requiresOtp(TransferRequest request) {
+		return request.amount().compareTo(properties.otpThreshold()) > 0;
 	}
 
 	/**
@@ -116,7 +164,7 @@ public class TransferService {
 			throw ApiException.badRequest("INVALID_IDEMPOTENCY_KEY",
 					"Idempotency-Key must be 8-100 letters, digits, '-' or '_' (a UUID is ideal).");
 		}
-		String requestHash = hash(request);
+		String requestHash = requestHash(request);
 
 		Optional<TransferResult> previous = findPrevious(currentUserId, idempotencyKey, requestHash);
 		if (previous.isPresent()) {
@@ -172,10 +220,7 @@ public class TransferService {
 					.orElseThrow(TransferService::accountNotFound);
 
 		// 1. Cheap checks first, before touching any locks.
-		if (amount.compareTo(properties.maxAmount()) > 0) {
-			throw ApiException.badRequest("AMOUNT_LIMIT_EXCEEDED",
-					"The amount exceeds the demo limit of " + properties.maxAmount().toPlainString() + ".");
-		}
+		checkLimit(amount);
 		if (sourceId.equals(destinationId)) {
 			throw ApiException.badRequest("SAME_ACCOUNT", "Source and destination accounts must be different.");
 		}
@@ -234,7 +279,7 @@ public class TransferService {
 	}
 
 	/** Fingerprint of the request data. "100", "100.0" and "100.00" count as the same amount. */
-	private static String hash(TransferRequest request) {
+	static String requestHash(TransferRequest request) {
 		String canonical = String.join("|", String.valueOf(request.sourceAccountId()),
 				String.valueOf(request.destinationAccountId()), String.valueOf(request.destinationAccountNumber()),
 				request.amount().setScale(2, RoundingMode.UNNECESSARY).toPlainString(),
